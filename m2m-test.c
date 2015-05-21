@@ -534,7 +534,7 @@ int main(int argc, char *argv[]) {
 			icc->width, icc->height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
 	if (ssc == NULL) error(EXIT_FAILURE, 0, "Can't allocate SDL swscale context");
 
-	enum AVPixelFormat format = AV_PIX_FMT_RGB565BE;
+	enum AVPixelFormat format = AV_PIX_FMT_YUV420P;
 
 	//! \brief Device swscale context
 	//! \detail Is used to convert read frame to M2M device output pixel format.
@@ -569,7 +569,7 @@ int main(int argc, char *argv[]) {
 			m2m_vim2m_controls(m2m_fd);
 		}
 
-		m2m_configure(m2m_fd, icc->width, icc->height);
+		//m2m_configure(m2m_fd, icc->width, icc->height);
 		m2m_buffers_get(m2m_fd);
 		m2m_streamon(m2m_fd);
 	}
