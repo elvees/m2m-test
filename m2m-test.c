@@ -65,6 +65,32 @@ static struct m2m_buffer {
 	AVFrame *frame;
 } out_bufs[NUM_BUFS], cap_bufs[NUM_BUFS];
 
+enum loglevel {
+	LOG_ERROR,
+	LOG_WARNING,
+	LOG_INFO,
+	LOG_VERBOSE,
+	LOG_DEBUG
+};
+
+static enum loglevel vlevel = LOG_WARNING;
+
+static void pr_level(enum loglevel const level, char const *format, ...) {
+	if (level <= vlevel) {
+		va_list va;
+		va_start(va, format);
+		vfprintf(level < LOG_INFO ? stderr : stdout, format, va);
+		putchar('\n');
+		va_end(va);
+	}
+}
+
+#define pr_err(format, ...)   pr_level(LOG_ERROR, format, ##__VA_ARGS__)
+#define pr_warn(format, ...)  pr_level(LOG_WARNING, format, ##__VA_ARGS__)
+#define pr_info(format, ...)  pr_level(LOG_INFO, format, ##__VA_ARGS__)
+#define pr_verb(format, ...)  pr_level(LOG_VERBOSE, format, ##__VA_ARGS__)
+#define pr_debug(format, ...) pr_level(LOG_DEBUG, format, ##__VA_ARGS__)
+
 /* For displaying multi-buffer transaction simulations, indicates current
    buffer in an ongoing transaction */
 //int curr_buf = 0;
@@ -451,7 +477,7 @@ int main(int argc, char *argv[]) {
 	int rc, opt;
 
 	bool sdl_enable = false;
-	unsigned verbosity = 0, offset = 0, frames = UINT_MAX, total_time = 0, loops = 1;
+	unsigned offset = 0, frames = UINT_MAX, total_time = 0, loops = 1;
 	char *framerate = NULL;
 	bool use_v4l2 = false;
 
@@ -471,7 +497,7 @@ int main(int argc, char *argv[]) {
 			case 's': offset = atoi(optarg); break;
 			case 'r': framerate = optarg; break;
 			case 'f': opfn = optarg; break;
-			case 'v': verbosity++; break;
+			case 'v': vlevel++; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
 	}
@@ -503,7 +529,7 @@ int main(int argc, char *argv[]) {
 		error(EXIT_FAILURE, 0, "Could not find stream information");
 
 	// Dump information about file onto standard error
-	av_dump_format(ifc, 0, input, 0);
+	if (vlevel >= LOG_INFO) av_dump_format(ifc, 0, input, 0);
 
 	// Find the first video stream
 	int video_stream_number = -1;
@@ -563,7 +589,7 @@ int main(int argc, char *argv[]) {
 	if (device) {
 		unsigned char card[32];
 		m2m_fd = m2m_init(device, card);
-		printf("Card: %.32s\n", card);
+		pr_info("Card: %.32s\n", card);
 
 		if (strncmp(card, "vim2m", 32) == 0) {
 			m2m_vim2m_controls(m2m_fd);
@@ -619,7 +645,7 @@ int main(int argc, char *argv[]) {
 		rc = avcodec_open2(occ, oc, NULL);
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not initialize output codec context");
 
-		av_dump_format(ofc, 0, output, 1);
+		if (vlevel >= LOG_INFO) av_dump_format(ofc, 0, output, 1);
 
 		if (!(ofc->oformat->flags & AVFMT_NOFILE)) {
 			rc = avio_open(&ofc->pb, output, AVIO_FLAG_WRITE);
@@ -628,8 +654,6 @@ int main(int argc, char *argv[]) {
 
 		rc = avformat_write_header(ofc, NULL);
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not write header for output file");
-
-		fprintf(stderr, "Ok\n");
 	}
 
 	int frame_finished;
@@ -672,7 +696,7 @@ int main(int argc, char *argv[]) {
 
 		if (use_v4l2 && packet.pts - start_pts + packet.duration < av_gettime() - start_time) {
 			valid = false;
-			if (verbosity) printf("Frame dropped\n");
+			pr_info("Frame dropped");
 		} else valid = true;
 
 		if (packet.stream_index == video_stream_number && valid) {
@@ -722,11 +746,9 @@ int main(int argc, char *argv[]) {
 						total_time += msec;
 
 						if (loops > 1)
-							printf("Frame %u.%u:", frame_number, i);
+							pr_info("Frame %u.%u: %u ms", frame_number, i, msec);
 						else
-							printf("Frame %u:", frame_number);
-
-						printf(" %u ms\n", msec);
+							pr_info("Frame %u: %u ms", frame_number, msec);
 					}
 
 					if (ofc) {
@@ -752,11 +774,11 @@ int main(int argc, char *argv[]) {
 					frame_number += 1;
 
 					--frames;
-					if (verbosity >= 2) printf("-- frames = %u\n", frames);
+					pr_debug("-- frames = %u\n", frames);
 					if (frames == 0) break;
 				} else {
 					offset--;
-					if (verbosity) printf("Frame skipped!\n");
+					pr_info("Frame skipped!\n");
 				}
 			}
 		}
@@ -777,7 +799,7 @@ int main(int argc, char *argv[]) {
 #endif
 	}
 
-	printf("Total time in M2M: %.1f s\n", (float)total_time/1000.0);
+	pr_info("Total time in M2M: %.1f s\n", (float)total_time/1000.0);
 
 	//SDL_SetVideoMode(WIDTH, HEIGHT * 2 + SEPARATOR, 16, SDL_HWSURFACE);
 
