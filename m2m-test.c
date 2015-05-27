@@ -124,6 +124,8 @@ static int m2m_init(char const *const device, unsigned char card[32]) {
 	struct v4l2_capability cap;
 	struct v4l2_control ctrl;
 
+	pr_verb("M2M: Open device...");
+
 	int fd = open(device, O_RDWR, 0);
 	if (fd < 0) error(EXIT_FAILURE, errno, "Can not open %s", device);
 
@@ -142,6 +144,8 @@ static void m2m_vim2m_controls(int const fd) {
 	bool hflip = false, vflip = false;
 	int rc;
 	struct v4l2_control ctrl;
+
+	pr_verb("M2M: Setup vim2m controls...");
 
 	if (hflip) {
 		ctrl.id = V4L2_CID_HFLIP;
@@ -171,6 +175,8 @@ static void m2m_vim2m_controls(int const fd) {
 static void m2m_configure(int const fd, int const width, int const height) { 
 	int rc;
 	struct v4l2_format fmt;
+
+	pr_verb("M2M: Setup formats...");
 
 	// Set format for capture
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -299,6 +305,8 @@ static int read_mem2mem_frame(int last)
 static void m2m_buffers_get(int const fd) {
 	int rc;
 
+	pr_verb("M2M: Obtaining buffers...");
+
 	struct v4l2_requestbuffers outreqbuf = {
 		.count = NUM_BUFS,
 		.type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
@@ -423,7 +431,11 @@ static void m2m_buffers_get(int const fd) {
 
 static void m2m_streamon(int const fd) {
 	int rc;
-	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	enum v4l2_buf_type type;
+
+	pr_verb("M2M: Stream on...");
+
+	type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	rc = ioctl(fd, VIDIOC_STREAMON, &type);
 	if (rc != 0) error(EXIT_FAILURE, errno, "Failed to start output stream");
 	//debug("STREAMON (%ld): %d\n", VIDIOC_STREAMON, ret);
@@ -435,6 +447,7 @@ static void m2m_streamon(int const fd) {
 }
 
 static void m2m_process(int const fd, struct v4l2_buffer const *const out, struct v4l2_buffer const *const cap) {
+	pr_verb("M2M: Processing...");
 	ioctl(fd, VIDIOC_QBUF, out);
 	ioctl(fd, VIDIOC_QBUF, cap);
 
@@ -600,6 +613,8 @@ int main(int argc, char *argv[]) {
 		m2m_streamon(m2m_fd);
 	}
 
+	pr_verb("Allocating AVFrames for obtained buffers...");
+
 	int av_frame_size = avpicture_get_size(format, icc->width, icc->height);
 	if (av_frame_size != out_bufs[0].v4l2.length)
 		error(EXIT_FAILURE, 0, "FFmpeg and V4L2 buffer sizes are not equal");
@@ -689,6 +704,8 @@ int main(int argc, char *argv[]) {
 	bool valid = true;
 	unsigned int frame_number = offset;
 
+	pr_verb("Begin processing...");
+
 	while (av_read_frame(ifc, &packet) >= 0) {
 		// Is this a packet from the video stream
 
@@ -703,6 +720,7 @@ int main(int argc, char *argv[]) {
 			avcodec_decode_video2(icc, iframe, &frame_finished, &packet);
 
 			if (frame_finished) {
+				pr_verb("Frame is finished...");
 
 				if (!offset) {
 
