@@ -602,7 +602,7 @@ int main(int argc, char *argv[]) {
 	if (device) {
 		unsigned char card[32];
 		m2m_fd = m2m_init(device, card);
-		pr_info("Card: %.32s\n", card);
+		pr_info("Card: %.32s", card);
 
 		if (strncmp(card, "vim2m", 32) == 0) {
 			m2m_vim2m_controls(m2m_fd);
@@ -817,7 +817,7 @@ int main(int argc, char *argv[]) {
 #endif
 	}
 
-	pr_info("Total time in M2M: %.1f s\n", (float)total_time/1000.0);
+	pr_info("Total time in M2M: %.1f s", (float)total_time/1000.0);
 
 	//SDL_SetVideoMode(WIDTH, HEIGHT * 2 + SEPARATOR, 16, SDL_HWSURFACE);
 
