@@ -764,9 +764,9 @@ int main(int argc, char *argv[]) {
 						total_time += msec;
 
 						if (loops > 1)
-							pr_info("Frame %u.%u: %u ms", frame_number, i, msec);
+							pr_info("Frame %u.%u (%u bytes): %u ms", frame_number, i, cap_bufs[0].v4l2.bytesused, msec);
 						else
-							pr_info("Frame %u: %u ms", frame_number, msec);
+							pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
 					}
 
 					if (ofc) {
