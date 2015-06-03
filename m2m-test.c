@@ -172,7 +172,7 @@ static void m2m_vim2m_controls(int const fd) {
 	if (rc != 0) error(EXIT_SUCCESS, errno, "Can not set transaction length");
 }
 
-static void m2m_configure(int const fd, int const width, int const height) { 
+static void m2m_configure(int const fd, int const width, int const height) {
 	int rc;
 	struct v4l2_format fmt;
 
@@ -516,7 +516,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (argc < optind + 1) error(EXIT_FAILURE, 0, "Not enough arguments");
-	
+
 	char const *input = argv[optind];
 
 	if (strncmp(input, "/dev/video", 10) == 0) {
@@ -618,7 +618,7 @@ int main(int argc, char *argv[]) {
 	int av_frame_size = avpicture_get_size(format, icc->width, icc->height);
 	if (av_frame_size != out_bufs[0].v4l2.length)
 		error(EXIT_FAILURE, 0, "FFmpeg and V4L2 buffer sizes are not equal");
-	
+
 	for (int i = 0; out_bufs[i].buf; i++) {
 		AVFrame *frame = out_bufs[i].frame = av_frame_alloc();
 		if (!frame) error(EXIT_FAILURE, 0, "Not enough memory");
@@ -644,7 +644,7 @@ int main(int argc, char *argv[]) {
 	if (output) {
 		avformat_alloc_output_context2(&ofc, NULL, NULL, output);
 		if (!ofc) error(EXIT_FAILURE, 0, "Can not allocate output context for %s", output);
-		
+
 		oc = avcodec_find_encoder(AV_CODEC_ID_RAWVIDEO);
 		if (!oc) error(EXIT_FAILURE, 0, "Can not find rawvideo codec");
 
@@ -772,7 +772,7 @@ int main(int argc, char *argv[]) {
 					if (ofc) {
 						AVPacket packet = { };
 						int finished;
-						
+
 						if (osc) sws_scale(osc, (uint8_t const* const*)cap_bufs[0].frame->data, cap_bufs[0].frame->linesize, 0, cap_bufs[0].frame->height,
 								oframe->data, oframe->linesize);
 
