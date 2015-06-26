@@ -455,6 +455,28 @@ static void m2m_process(int const fd, struct v4l2_buffer const *const out, struc
 	ioctl(fd, VIDIOC_DQBUF, out);
 }
 
+static void yuv420_to_fuck(unsigned const width, unsigned const height, uint8_t *const buf) {
+	uint8_t temp[width * height * 3 / 2];
+
+	for (size_t i = 0, j = 0; i < height; i += 2, j += 3) {
+		memcpy(temp + j * width, buf + i * width, 2 * width);
+	}
+
+	for (size_t i = 0, j = 2; i < height / 2; i++, j += 3) {
+		uint8_t *const out = &temp[j * width];
+		uint8_t *const incb = &buf[width * height + i * width / 2];
+		uint8_t *const incr = &buf[width * height + width * height / 4 + i * width / 2];
+
+		for (size_t k = 0; k < width / 2; k++) {
+			out[2 * k]     = incb[k];
+			out[2 * k + 1] = incr[k];
+		}
+	}
+
+	memcpy(buf, temp, width * height * 3 / 2);
+}
+
+
 #ifndef VERSION
 #define VERSION "undef"
 #endif
@@ -756,6 +778,10 @@ int main(int argc, char *argv[]) {
 					for (int i = 0; i < loops; i++) {
 						// Process frame
 						rc = clock_gettime(CLOCK_MONOTONIC, &start);
+
+						yuv420_to_fuck(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
+						out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
+
 						m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
 						rc = clock_gettime(CLOCK_MONOTONIC, &stop);
 
