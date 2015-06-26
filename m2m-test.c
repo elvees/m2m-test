@@ -769,7 +769,11 @@ int main(int argc, char *argv[]) {
 							pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
 					}
 
-					if (ofc) {
+					static FILE *f;
+					if (!f) f = fopen("test.264", "w");
+					fwrite(cap_bufs[0].buf, 1, cap_bufs[0].v4l2.bytesused, f);
+
+					/*if (ofc) {
 						AVPacket packet = { };
 						int finished;
 
@@ -787,7 +791,7 @@ int main(int argc, char *argv[]) {
 							rc = av_interleaved_write_frame(ofc, &packet);
 							if (rc < 0) error(EXIT_FAILURE, 0, "Can not write output packet");
 						}
-					}
+					}*/
 
 					frame_number += 1;
 
