@@ -521,14 +521,14 @@ int main(int argc, char *argv[]) {
 	while ((opt = getopt(argc, argv, "d:f:hn:o:r:s:vx")) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
-			case 'x': sdl_enable = true; break;
-			case 'n': frames = atoi(optarg); break;
-			case 'h': help(argv[0]); return EXIT_SUCCESS;
-			case 'o': output = optarg; break;
-			case 's': offset = atoi(optarg); break;
-			case 'r': framerate = optarg; break;
 			case 'f': opfn = optarg; break;
+			case 'h': help(argv[0]); return EXIT_SUCCESS;
+			case 'n': frames = atoi(optarg); break;
+			case 'o': output = optarg; break;
+			case 'r': framerate = optarg; break;
+			case 's': offset = atoi(optarg); break;
 			case 'v': vlevel++; break;
+			case 'x': sdl_enable = true; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
 	}
