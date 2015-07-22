@@ -511,14 +511,14 @@ int main(int argc, char *argv[]) {
 	bool sdl_enable = false;
 	unsigned offset = 0, frames = UINT_MAX, total_time = 0, looptime;
 	char *framerate = NULL;
-	bool use_v4l2 = false;
+	bool use_v4l2 = false, transform = false;
 
 	char const *output = NULL, *device = NULL;
 	char const *opfn = NULL; //!< Output pixel format name
 
 	av_register_all();
 
-	while ((opt = getopt(argc, argv, "d:f:hn:o:r:s:vx")) != -1) {
+	while ((opt = getopt(argc, argv, "d:f:hn:o:r:s:tvx")) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
 			case 'f': opfn = optarg; break;
@@ -527,6 +527,7 @@ int main(int argc, char *argv[]) {
 			case 'o': output = optarg; break;
 			case 'r': framerate = optarg; break;
 			case 's': offset = atoi(optarg); break;
+			case 't': transform = true; break;
 			case 'v': vlevel++; break;
 			case 'x': sdl_enable = true; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
@@ -776,7 +777,7 @@ int main(int argc, char *argv[]) {
 					rc = clock_gettime(CLOCK_MONOTONIC, &start);
 
 					// Process frame
-					yuv420_to_m420(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
+					if (transform) yuv420_to_m420(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
 					out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
 
 					m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
