@@ -509,7 +509,7 @@ int main(int argc, char *argv[]) {
 	int rc, opt;
 
 	bool sdl_enable = false;
-	unsigned offset = 0, frames = UINT_MAX, total_time = 0, loops = 1, looptime;
+	unsigned offset = 0, frames = UINT_MAX, total_time = 0, looptime;
 	char *framerate = NULL;
 	bool use_v4l2 = false;
 
@@ -524,7 +524,6 @@ int main(int argc, char *argv[]) {
 			case 'x': sdl_enable = true; break;
 			case 'n': frames = atoi(optarg); break;
 			case 'h': help(argv[0]); return EXIT_SUCCESS;
-			case 'l': loops = atoi(optarg); break;
 			case 'o': output = optarg; break;
 			case 's': offset = atoi(optarg); break;
 			case 'r': framerate = optarg; break;
@@ -774,25 +773,20 @@ int main(int argc, char *argv[]) {
 
 					sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
 
-					for (int i = 0; i < loops; i++) {
-						rc = clock_gettime(CLOCK_MONOTONIC, &start);
+					rc = clock_gettime(CLOCK_MONOTONIC, &start);
 
-						// Process frame
-						yuv420_to_fuck(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
-						out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
+					// Process frame
+					yuv420_to_fuck(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
+					out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
 
-						m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
-						rc = clock_gettime(CLOCK_MONOTONIC, &stop);
+					m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
+					rc = clock_gettime(CLOCK_MONOTONIC, &stop);
 
-						unsigned msec = (stop.tv_sec - start.tv_sec)*1000U +
-								(unsigned)((stop.tv_nsec - start.tv_nsec)/1000000L);
-						total_time += msec;
+					unsigned msec = (stop.tv_sec - start.tv_sec)*1000U +
+							(unsigned)((stop.tv_nsec - start.tv_nsec)/1000000L);
+					total_time += msec;
 
-						if (loops > 1)
-							pr_info("Frame %u.%u (%u bytes): %u ms", frame_number, i, cap_bufs[0].v4l2.bytesused, msec);
-						else
-							pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
-					}
+					pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
 
 					static FILE *f;
 					if (!f) f = fopen("test.264", "w");
