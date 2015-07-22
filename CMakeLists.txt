@@ -11,4 +11,7 @@ set(CMAKE_C_FLAGS "-std=gnu99 -Wall")
 add_executable(m2m-test m2m-test.c)
 target_link_libraries(m2m-test ${FFMPEG_LIBRARIES})
 
-install(TARGETS m2m-test RUNTIME DESTINATION bin)
+add_executable(any2m420 any2m420.c)
+target_link_libraries(any2m420 ${FFMPEG_LIBRARIES})
+
+install(TARGETS m2m-test any2m420 RUNTIME DESTINATION bin)
