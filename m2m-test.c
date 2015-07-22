@@ -660,7 +660,7 @@ int main(int argc, char *argv[]) {
 		avpicture_fill((AVPicture *)frame, cap_bufs[i].buf, frame->format, frame->width, frame->height);
 	}
 
-	if (output) {
+	/* if (output) {
 		avformat_alloc_output_context2(&ofc, NULL, NULL, output);
 		if (!ofc) error(EXIT_FAILURE, 0, "Can not allocate output context for %s", output);
 
@@ -688,7 +688,7 @@ int main(int argc, char *argv[]) {
 
 		rc = avformat_write_header(ofc, NULL);
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not write header for output file");
-	}
+	} */
 
 	int frame_finished;
 	AVPacket packet;
@@ -789,8 +789,8 @@ int main(int argc, char *argv[]) {
 					pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
 
 					static FILE *f;
-					if (!f) f = fopen("test.264", "w");
-					fwrite(cap_bufs[0].buf, 1, cap_bufs[0].v4l2.bytesused, f);
+					if (!f && output) f = fopen(output, "w");
+					if (f) fwrite(cap_bufs[0].buf, 1, cap_bufs[0].v4l2.bytesused, f);
 
 					/*if (ofc) {
 						AVPacket packet = { };
