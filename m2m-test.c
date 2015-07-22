@@ -452,7 +452,7 @@ static void m2m_process(int const fd, struct v4l2_buffer const *const out, struc
 	ioctl(fd, VIDIOC_DQBUF, out);
 }
 
-static void yuv420_to_fuck(unsigned const width, unsigned const height, uint8_t *const buf) {
+static void yuv420_to_m420(unsigned const width, unsigned const height, uint8_t *const buf) {
 	uint8_t temp[width * height * 3 / 2];
 
 	for (size_t i = 0, j = 0; i < height; i += 2, j += 3) {
@@ -776,7 +776,7 @@ int main(int argc, char *argv[]) {
 					rc = clock_gettime(CLOCK_MONOTONIC, &start);
 
 					// Process frame
-					yuv420_to_fuck(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
+					yuv420_to_m420(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
 					out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
 
 					m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
