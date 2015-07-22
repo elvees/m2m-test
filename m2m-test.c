@@ -480,13 +480,17 @@ static void yuv420_to_m420(unsigned const width, unsigned const height, uint8_t 
 
 static void help(const char *program_name) {
 	puts("m2m-test v" VERSION " \n");
-	printf("Synopsys: %s [options] file | /dev/videoX\n\n", program_name);
+	printf("Synopsys: %s -d device [options] file | /dev/videoX\n\n", program_name);
 	puts("Options:");
-	puts("    -f arg    Specify number of frames to process [default is all]");
-	puts("    -n arg    Specify how many time each frame should be processed [default is 1]");
+	puts("    -d arg    Specify M2M device to use [mandatory]");
+	puts("    -f arg    Specify output pixel format for M2M device");
+	puts("    -n arg    Specify how many frames should be processed");
+	puts("    -o arg    Output file name");
 	puts("    -r arg    When grabbing from camera specify desired framerate");
-	puts("    -o arg    Offset in frames from the beginning of video [default is 0]");
+	puts("    -s arg    From which frame processing should be started");
+	puts("    -t        Transform video to M420 [Avico-specific]");
 	puts("    -v        Be more verbose. Can be specified multiple times");
+	puts("    -x        Show processed video [does not work]");
 }
 
 int main(int argc, char *argv[]) {
