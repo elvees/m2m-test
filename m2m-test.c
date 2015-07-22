@@ -503,16 +503,16 @@ int main(int argc, char *argv[]) {
 	AVDictionary *options = NULL;
 	enum AVPixelFormat opf = AV_PIX_FMT_NONE; //!< Output pixel format
 	struct SwsContext *ssc; //!< SDL swscale context
-	struct SwsContext *dsc; //!< Device swscale context
+	struct SwsContext *dsc = NULL; //!< Device swscale context
 	struct SwsContext *osc = NULL; //!< Output swscale context
 	AVFrame *iframe = NULL; //!< Input frame
 	AVFrame *oframe = NULL; //!< Output frame
 
-	struct timespec start, stop;
+	struct timespec start, stop, loopstart, loopstop;
 	int rc, opt;
 
 	bool sdl_enable = false;
-	unsigned offset = 0, frames = UINT_MAX, total_time = 0, loops = 1;
+	unsigned offset = 0, frames = UINT_MAX, total_time = 0, loops = 1, looptime;
 	char *framerate = NULL;
 	bool use_v4l2 = false;
 
@@ -596,6 +596,7 @@ int main(int argc, char *argv[]) {
 	if (ssc == NULL) error(EXIT_FAILURE, 0, "Can't allocate SDL swscale context");
 
 	enum AVPixelFormat format = AV_PIX_FMT_YUV420P;
+
 
 	//! \brief Device swscale context
 	//! \detail Is used to convert read frame to M2M device output pixel format.
@@ -726,6 +727,7 @@ int main(int argc, char *argv[]) {
 	bool valid = true;
 	unsigned int frame_number = offset;
 
+	rc = clock_gettime(CLOCK_MONOTONIC, &loopstart);
 	pr_verb("Begin processing...");
 
 	while (av_read_frame(ifc, &packet) >= 0) {
@@ -776,9 +778,9 @@ int main(int argc, char *argv[]) {
 					sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
 
 					for (int i = 0; i < loops; i++) {
-						// Process frame
 						rc = clock_gettime(CLOCK_MONOTONIC, &start);
 
+						// Process frame
 						yuv420_to_fuck(out_bufs[0].frame->width, out_bufs[0].frame->height, out_bufs[0].buf);
 						out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
 
@@ -847,7 +849,12 @@ int main(int argc, char *argv[]) {
 #endif
 	}
 
+	rc = clock_gettime(CLOCK_MONOTONIC, &loopstop);
+	looptime = (loopstop.tv_sec - loopstart.tv_sec)*1000U +
+			(unsigned)((loopstop.tv_nsec - loopstart.tv_nsec)/1000000L);
+
 	pr_info("Total time in M2M: %.1f s", (float)total_time/1000.0);
+	pr_info("Total time in main loop: %.1f s", (float)looptime/1000.0);
 
 	//SDL_SetVideoMode(WIDTH, HEIGHT * 2 + SEPARATOR, 16, SDL_HWSURFACE);
 
