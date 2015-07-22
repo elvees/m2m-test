@@ -1,14 +1,11 @@
 /*
+ * Copyright (C) 2009 by Pawel Osciak, p.osciak <at> samsung.com
+ * Copyright (C) 2009 by Samsung Electronics Co., Ltd.
  * Copyright (C) 2012 by Tomasz Moń <desowin@gmail.com>
- *
- * compile with:
- *   gcc -o sdlm2mtester-rgb565x sdlm2mtester-rgb565x.c -lSDL
+ * Copyright (C) 2015 by Anton Leontiev <aleontiev@elvees.com>
  *
  * Based on V4L2 video capture example and process-vmalloc.c
- * Capture+output (process) V4L2 device tester.
- *
- * Pawel Osciak, p.osciak <at> samsung.com
- * 2009, Samsung Electronics Co., Ltd.
+ * Capture + output (process) V4L2 device tester.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by the
