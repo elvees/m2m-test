@@ -116,10 +116,9 @@ static void pr_level(enum loglevel const level, char const *format, ...) {
     SDL_UpdateRect(screen, 0, 0, 0, 0);
 }*/
 
-static int m2m_init(char const *const device, unsigned char card[32]) {
+static int m2m_init(char const *const device, char card[32]) {
 	int ret;
 	struct v4l2_capability cap;
-	struct v4l2_control ctrl;
 
 	pr_verb("M2M: Open device...");
 
@@ -169,7 +168,7 @@ static void m2m_vim2m_controls(int const fd) {
 	if (rc != 0) error(EXIT_SUCCESS, errno, "Can not set transaction length");
 }
 
-static void m2m_configure(int const fd, int const width, int const height) {
+/*static void m2m_configure(int const fd, int const width, int const height) {
 	int rc;
 	struct v4l2_format fmt;
 
@@ -194,7 +193,7 @@ static void m2m_configure(int const fd, int const width, int const height) {
 
 	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
 	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set output format");
-}
+}*/
 
 /*
 static int read_mem2mem_frame(int last)
@@ -490,7 +489,7 @@ static void help(const char *program_name) {
 	puts("    -s arg    From which frame processing should be started");
 	puts("    -t        Transform video to M420 [Avico-specific]");
 	puts("    -v        Be more verbose. Can be specified multiple times");
-	puts("    -x        Show processed video [does not work]");
+	//puts("    -x        Show processed video [does not work]");
 }
 
 int main(int argc, char *argv[]) {
@@ -498,9 +497,9 @@ int main(int argc, char *argv[]) {
 	AVFormatContext *ofc = NULL; //!< Output format context
 	AVInputFormat *ifmt = NULL; //!< Input format
 	AVCodecContext *icc; //!< Input codec context
-	AVCodecContext *occ; //!< Output codec context
+	//AVCodecContext *occ; //!< Output codec context
 	AVCodec *ic; //!< Input codec
-	AVCodec *oc; //!< Output codec
+	// AVCodec *oc; //!< Output codec
 	AVDictionary *options = NULL;
 	enum AVPixelFormat opf = AV_PIX_FMT_NONE; //!< Output pixel format
 	struct SwsContext *ssc; //!< SDL swscale context
@@ -512,7 +511,7 @@ int main(int argc, char *argv[]) {
 	struct timespec start, stop, loopstart, loopstop;
 	int rc, opt;
 
-	bool sdl_enable = false;
+	// bool sdl_enable = false;
 	unsigned offset = 0, frames = UINT_MAX, total_time = 0, looptime;
 	char *framerate = NULL;
 	bool use_v4l2 = false, transform = false;
@@ -522,7 +521,7 @@ int main(int argc, char *argv[]) {
 
 	av_register_all();
 
-	while ((opt = getopt(argc, argv, "d:f:hn:o:r:s:tvx")) != -1) {
+	while ((opt = getopt(argc, argv, "d:f:hn:o:r:s:tv")) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
 			case 'f': opfn = optarg; break;
@@ -533,12 +532,13 @@ int main(int argc, char *argv[]) {
 			case 's': offset = atoi(optarg); break;
 			case 't': transform = true; break;
 			case 'v': vlevel++; break;
-			case 'x': sdl_enable = true; break;
+			//case 'x': sdl_enable = true; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
 	}
 
 	if (argc < optind + 1) error(EXIT_FAILURE, 0, "Not enough arguments");
+	if (device == NULL) error(EXIT_FAILURE, 0, "You must specify device");
 
 	char const *input = argv[optind];
 
@@ -623,19 +623,18 @@ int main(int argc, char *argv[]) {
 	}
 
 	int m2m_fd;
-	if (device) {
-		unsigned char card[32];
-		m2m_fd = m2m_init(device, card);
-		pr_info("Card: %.32s", card);
+	char card[32];
 
-		if (strncmp(card, "vim2m", 32) == 0) {
-			m2m_vim2m_controls(m2m_fd);
-		}
+	m2m_fd = m2m_init(device, card);
+	pr_info("Card: %.32s", card);
 
-		//m2m_configure(m2m_fd, icc->width, icc->height);
-		m2m_buffers_get(m2m_fd);
-		m2m_streamon(m2m_fd);
+	if (strncmp(card, "vim2m", 32) == 0) {
+		m2m_vim2m_controls(m2m_fd);
 	}
+
+	//m2m_configure(m2m_fd, icc->width, icc->height);
+	m2m_buffers_get(m2m_fd);
+	m2m_streamon(m2m_fd);
 
 	pr_verb("Allocating AVFrames for obtained buffers...");
 
