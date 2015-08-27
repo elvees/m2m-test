@@ -168,32 +168,32 @@ static void m2m_vim2m_controls(int const fd) {
 	if (rc != 0) error(EXIT_SUCCESS, errno, "Can not set transaction length");
 }
 
-/*static void m2m_configure(int const fd, int const width, int const height) {
+static void m2m_configure(int const fd, int const width, int const height) {
 	int rc;
 	struct v4l2_format fmt;
 
 	pr_verb("M2M: Setup formats...");
 
-	// Set format for capture
-	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width = width;
-	fmt.fmt.pix.height = height;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB565X;
-	fmt.fmt.pix.field = V4L2_FIELD_ANY;
-
-	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
-	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set input format");
-
-	// The same format for output
+	// Set format for output
 	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	fmt.fmt.pix.width = width;
 	fmt.fmt.pix.height = height;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB565X;
+	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_M420;
 	fmt.fmt.pix.field = V4L2_FIELD_ANY;
 
 	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
 	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set output format");
-}*/
+
+	// The same format for capture
+	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	fmt.fmt.pix.width = width;
+	fmt.fmt.pix.height = height;
+	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+	fmt.fmt.pix.field = V4L2_FIELD_ANY;
+
+	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
+	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set capture format");
+}
 
 /*
 static int read_mem2mem_frame(int last)
@@ -632,7 +632,7 @@ int main(int argc, char *argv[]) {
 		m2m_vim2m_controls(m2m_fd);
 	}
 
-	//m2m_configure(m2m_fd, icc->width, icc->height);
+	m2m_configure(m2m_fd, icc->width, icc->height);
 	m2m_buffers_get(m2m_fd);
 	m2m_streamon(m2m_fd);
 
