@@ -485,11 +485,11 @@ static void yuv420_to_m420(AVFrame *frame) {
 }
 
 #ifndef VERSION
-#define VERSION "undef"
+#define VERSION "unversioned"
 #endif
 
 static void help(const char *program_name) {
-	puts("m2m-test v" VERSION " \n");
+	puts("m2m-test " VERSION " \n");
 	printf("Synopsys: %s -d device [options] file | /dev/videoX\n\n", program_name);
 	puts("Options:");
 	puts("    -d arg    Specify M2M device to use [mandatory]");

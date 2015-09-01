@@ -83,8 +83,12 @@ static void yuv420_to_m420(AVFrame *frame) {
 	free(temp);
 }
 
+#ifndef VERSION
+#define VERSION "unversioned"
+#endif
+
 static void help(const char *program_name) {
-	puts("any2m420 v1.0\n");
+	puts("any2m420 " VERSION "\n");
 	printf("Synopsys: %s -o output-file input-file\n", program_name);
 	puts("\nThis tool converts input video to M420 pixel format and outputs");
 	puts("it to YUV4MPEG container.");
