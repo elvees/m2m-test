@@ -694,7 +694,6 @@ int main(int argc, char *argv[]) {
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not write header for output file");
 	} */
 
-	int frame_finished;
 	AVPacket packet;
 
 #ifdef ENABLE_SDL
@@ -741,10 +740,12 @@ int main(int argc, char *argv[]) {
 		} else valid = true;
 
 		if (packet.stream_index == video_stream_number && valid) {
-			avcodec_decode_video2(icc, iframe, &frame_finished, &packet);
+			int frame_read;
 
-			if (frame_finished) {
-				pr_verb("Frame is finished...");
+			avcodec_decode_video2(icc, iframe, &frame_read, &packet);
+
+			if (frame_read) {
+				pr_verb("Frame is read...");
 
 				if (!offset) {
 

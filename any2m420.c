@@ -209,7 +209,6 @@ int main(int argc, char *argv[]) {
 	rc = av_frame_get_buffer(oframe, 32);
 	if (rc < 0) error(EXIT_FAILURE, 0, "Can not allocate output frame buffers");
 
-	int frame_finished;
 	AVPacket ipacket;
 
 	pr_verb("Begin processing...");
@@ -218,10 +217,12 @@ int main(int argc, char *argv[]) {
 		// Is this a packet from the video stream
 
 		if (ipacket.stream_index == video_stream_number) {
-			avcodec_decode_video2(icc, iframe, &frame_finished, &ipacket);
+			int frame_read;
 
-			if (frame_finished) {
-				pr_verb("Frame is finished...");
+			avcodec_decode_video2(icc, iframe, &frame_read, &ipacket);
+
+			if (frame_read) {
+				pr_verb("Frame is read...");
 
 				sws_scale(osc, (uint8_t const* const*)iframe->data,
 						iframe->linesize, 0, iframe->height, oframe->data,
