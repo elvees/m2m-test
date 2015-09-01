@@ -56,7 +56,8 @@ static void pr_level(enum loglevel const level, char const *format, ...) {
 
 static void yuv420_to_m420(AVFrame *frame) {
 	unsigned const width = frame->width, height = frame->height;
-	uint8_t temp[width * height * 3 / 2];
+	uint8_t *temp = malloc(width * height * 3 / 2);
+	if (!temp) pr_err("Can not allocate memory for convertion buffer");
 
 	// Luma
 	for (size_t i = 0, j = 0; i < height; i += 2, j += 3) {
@@ -78,6 +79,8 @@ static void yuv420_to_m420(AVFrame *frame) {
 	memcpy(frame->data[0], temp, width * height);
 	memcpy(frame->data[1], temp + width * height, width * height / 4);
 	memcpy(frame->data[2], temp + width * height + width * height / 4, width * height / 4);
+
+	free(temp);
 }
 
 static void help(const char *program_name) {
