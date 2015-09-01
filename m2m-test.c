@@ -653,6 +653,7 @@ int main(int argc, char *argv[]) {
 		avpicture_fill((AVPicture *)frame, out_bufs[i].buf, frame->format, frame->width, frame->height);
 	}
 
+	/*
 	for (int i = 0; cap_bufs[i].buf; i++) {
 		AVFrame *frame = cap_bufs[i].frame = av_frame_alloc();
 		if (!frame) error(EXIT_FAILURE, 0, "Not enough memory");
@@ -663,6 +664,7 @@ int main(int argc, char *argv[]) {
 
 		avpicture_fill((AVPicture *)frame, cap_bufs[i].buf, frame->format, frame->width, frame->height);
 	}
+	*/
 
 	/* if (output) {
 		avformat_alloc_output_context2(&ofc, NULL, NULL, output);
