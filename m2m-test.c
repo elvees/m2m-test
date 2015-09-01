@@ -174,7 +174,6 @@ static void m2m_configure(int const fd, int const width, int const height) {
 
 	pr_verb("M2M: Setup formats...");
 
-	// Set format for output
 	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	fmt.fmt.pix.width = width;
 	fmt.fmt.pix.height = height;
@@ -184,7 +183,9 @@ static void m2m_configure(int const fd, int const width, int const height) {
 	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
 	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set output format");
 
-	// The same format for capture
+	pr_debug("M2M: Output configured: width = %u, height = %u, sizeimage = %u",
+			fmt.fmt.pix.width, fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
+
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width = width;
 	fmt.fmt.pix.height = height;
@@ -192,7 +193,10 @@ static void m2m_configure(int const fd, int const width, int const height) {
 	fmt.fmt.pix.field = V4L2_FIELD_ANY;
 
 	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
-	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set capture format");
+	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set output format");
+
+	pr_debug("M2M: Capture configured: width = %u, height = %u, sizeimage = %u",
+			fmt.fmt.pix.width, fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
 }
 
 /*
@@ -318,12 +322,12 @@ static void m2m_buffers_get(int const fd) {
 	rc = ioctl(fd, VIDIOC_REQBUFS, &outreqbuf);
 	if (rc != 0) error(EXIT_FAILURE, errno, "Can not request output buffers");
 	if (outreqbuf.count == 0) error(EXIT_FAILURE, 0, "Device gives zero output buffers");
-	//debug("Got %d src buffers\n", num_src_bufs);
+	pr_debug("M2M: Got %d output buffers", outreqbuf.count);
 
 	rc = ioctl(fd, VIDIOC_REQBUFS, &capreqbuf);
 	if (rc != 0) error(EXIT_FAILURE, errno, "Can not request capture buffers");
 	if (capreqbuf.count == 0) error(EXIT_FAILURE, 0, "Device gives zero capture buffers");
-	//debug("Got %d dst buffers\n", num_dst_bufs);
+	pr_debug("M2M: Got %d capture buffers", capreqbuf.count);
 
 	//transsize = WIDTH * HEIGHT / translen * 2;
 
@@ -335,7 +339,7 @@ static void m2m_buffers_get(int const fd) {
 
 		rc = ioctl(fd, VIDIOC_QUERYBUF, vbuf);
 		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query output buffer");
-		//debug("QUERYBUF returned offset: %x\n", buf.m.offset);
+		pr_debug("M2M: Got output buffer #%u: length = %u", i, vbuf->length);
 
 		//! \todo size field is not needed
 		//out_bufs[i].size = vbuf->length;
@@ -351,7 +355,7 @@ static void m2m_buffers_get(int const fd) {
 
 		rc = ioctl(fd, VIDIOC_QUERYBUF, vbuf);
 		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query capture buffer");
-		//debug("QUERYBUF returned offset: %x\n", buf.m.offset);
+		pr_debug("M2M: Got capture buffer #%u: length = %u", i, vbuf->length);
 
 		cap_bufs[i].buf = mmap(NULL, vbuf->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, vbuf->m.offset);
 		if (cap_bufs[i].buf == MAP_FAILED) error(EXIT_FAILURE, errno, "Can not mmap capture buffer");
