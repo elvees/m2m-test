@@ -862,8 +862,13 @@ int main(int argc, char *argv[]) {
 	looptime = (loopstop.tv_sec - loopstart.tv_sec)*1000U +
 			(unsigned)((loopstop.tv_nsec - loopstart.tv_nsec)/1000000L);
 
-	pr_info("Total time in M2M: %.1f s", (float)total_time/1000.0);
-	pr_info("Total time in main loop: %.1f s", (float)looptime/1000.0);
+	pr_info("Total time in M2M: %.1f s (%.1f FPS)",
+			(float)total_time / 1000.0,
+			(float)(frame_number - offset) * 1000.0f / (float)total_time);
+
+	pr_info("Total time in main loop: %.1f s (%.1f FPS)",
+			(float)looptime / 1000.0,
+			(float)(frame_number - offset) * 1000.0f / (float)looptime);
 
 	//SDL_SetVideoMode(WIDTH, HEIGHT * 2 + SEPARATOR, 16, SDL_HWSURFACE);
 
