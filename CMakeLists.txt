@@ -7,7 +7,7 @@ pkg_check_modules(FFMPEG REQUIRED libavformat libavdevice libavcodec libswscale 
 include_directories(${FFMPEG_INCLUDE_DIRS})
 
 set(CMAKE_C_FLAGS "-std=gnu99 -Wall")
-add_definitions(-DVERSION="v1.1")
+add_definitions(-DVERSION="v1.2")
 
 add_executable(m2m-test m2m-test.c m420.c)
 target_link_libraries(m2m-test ${FFMPEG_LIBRARIES})
