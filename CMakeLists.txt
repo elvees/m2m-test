@@ -15,4 +15,6 @@ target_link_libraries(m2m-test ${FFMPEG_LIBRARIES})
 add_executable(any2m420 any2m420.c m420.c)
 target_link_libraries(any2m420 ${FFMPEG_LIBRARIES})
 
-install(TARGETS m2m-test any2m420 RUNTIME DESTINATION bin)
+add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)
+
+install(TARGETS m2m-test any2m420 cap-enc RUNTIME DESTINATION bin)
