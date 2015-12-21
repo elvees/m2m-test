@@ -13,8 +13,6 @@
  * option) any later version
  */
 
-//#include <SDL/SDL.h>
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -23,8 +21,7 @@
 #include <assert.h>
 #include <error.h>
 
-//#include <getopt.h>             /* getopt_long() */
-#include <fcntl.h>              /* low-level i/o */
+#include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
 #include <malloc.h>
@@ -33,9 +30,6 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-
-// ?
-#include <asm/types.h>          /* for videodev2.h */
 
 #include <linux/videodev2.h>
 
@@ -49,9 +43,6 @@
 #include <libavutil/time.h>
 
 #include "m420.h"
-
-//SDL_Surface *data_sf;
-//SDL_Surface *data_m2m_sf;
 
 #define V4L2_CID_TRANS_TIME_MSEC (V4L2_CID_PRIVATE_BASE)
 #define V4L2_CID_TRANS_NUM_BUFS  (V4L2_CID_PRIVATE_BASE + 1)
@@ -89,34 +80,6 @@ static void pr_level(enum loglevel const level, char const *format, ...) {
 #define pr_info(format, ...)  pr_level(LOG_INFO, format, ##__VA_ARGS__)
 #define pr_verb(format, ...)  pr_level(LOG_VERBOSE, format, ##__VA_ARGS__)
 #define pr_debug(format, ...) pr_level(LOG_DEBUG, format, ##__VA_ARGS__)
-
-/* For displaying multi-buffer transaction simulations, indicates current
-   buffer in an ongoing transaction */
-//int curr_buf = 0;
-//int transtime = 1;
-//int num_frames = 1000;
-
-//static uint8_t *data;
-
-/*static void render(SDL_Surface * pre, SDL_Surface * post)
-{
-    SDL_Rect rect_pre = {
-        .x = 0,.y = 0,
-        .w = WIDTH,.h = HEIGHT
-    };
-
-    SDL_Rect rect_post = {
-        .x = 0,.y = HEIGHT + SEPARATOR,
-        .w = WIDTH,.h = HEIGHT
-    };
-
-    SDL_Surface *screen = SDL_GetVideoSurface();
-
-    SDL_BlitSurface(pre, NULL, screen, &rect_pre);
-    SDL_BlitSurface(post, NULL, screen, &rect_post);
-
-    SDL_UpdateRect(screen, 0, 0, 0, 0);
-}*/
 
 static int m2m_init(char const *const device, char card[32]) {
 	int ret;
@@ -201,109 +164,6 @@ static void m2m_configure(int const fd, int const width, int const height) {
 			fmt.fmt.pix.width, fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
 }
 
-/*
-static int read_mem2mem_frame(int last)
-{
-    struct v4l2_buffer buf;
-    int ret;
-
-    memzero(buf);
-
-    buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-    buf.memory = V4L2_MEMORY_MMAP;
-
-    ret = ioctl(mem2mem_fd, VIDIOC_DQBUF, &buf);
-    debug("Dequeued source buffer, index: %d\n", buf.index);
-    if (ret)
-    {
-        switch (errno)
-        {
-        case EAGAIN:
-            debug("Got EAGAIN\n");
-            return 0;
-
-        case EIO:
-            debug("Got EIO\n");
-            return 0;
-
-        default:
-            perror("ioctl");
-            return 0;
-        }
-    }
-
-    // Verify we've got a correct buffer
-    assert(buf.index < num_src_bufs);
-
-    // Enqueue back the buffer (note that the index is preserved)
-    if (!last)
-    {
-        uint8_t *p_buf = (uint8_t *) buffer_sdl;
-        p_buf += curr_buf * transsize;
-
-        gen_buf((uint8_t *) p_src_buf[buf.index], p_buf, transsize);
-
-
-        buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-        buf.memory = V4L2_MEMORY_MMAP;
-        ret = ioctl(mem2mem_fd, VIDIOC_QBUF, &buf);
-        perror_ret(ret != 0, "ioctl");
-    }
-
-
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-    debug("Dequeuing destination buffer\n");
-    ret = ioctl(mem2mem_fd, VIDIOC_DQBUF, &buf);
-    if (ret)
-    {
-        switch (errno)
-        {
-        case EAGAIN:
-            debug("Got EAGAIN\n");
-            return 0;
-
-        case EIO:
-            debug("Got EIO\n");
-            return 0;
-
-        default:
-            perror("ioctl");
-            return 1;
-        }
-    }
-    debug("Dequeued dst buffer, index: %d\n", buf.index);
-    // Verify we've got a correct buffer
-    assert(buf.index < num_dst_bufs);
-
-    debug("Current buffer in the transaction: %d\n", curr_buf);
-
-    uint8_t *p_post = (uint8_t *) buffer_m2m_sdl;
-    p_post += curr_buf * transsize;
-    ++curr_buf;
-    if (curr_buf >= translen)
-    {
-        curr_buf = 0;
-        next_input_frame();
-    }
-
-    // Display results
-    gen_buf(p_post, (uint8_t *) p_dst_buf[buf.index], transsize);
-
-    render(data_sf, data_m2m_sf);
-
-    // Enqueue back the buffer
-    if (!last)
-    {
-        // gen_dst_buf(p_dst_buf[buf.index], dst_buf_size[buf.index]);
-        ret = ioctl(mem2mem_fd, VIDIOC_QBUF, &buf);
-        perror_ret(ret != 0, "ioctl");
-        debug("Enqueued back dst buffer\n");
-    }
-
-    return 0;
-}*/
-
 static void m2m_buffers_get(int const fd) {
 	int rc;
 
@@ -331,8 +191,6 @@ static void m2m_buffers_get(int const fd) {
 	if (capreqbuf.count == 0) error(EXIT_FAILURE, 0, "Device gives zero capture buffers");
 	pr_debug("M2M: Got %d capture buffers", capreqbuf.count);
 
-	//transsize = WIDTH * HEIGHT / translen * 2;
-
 	for (int i = 0; i < outreqbuf.count; ++i) {
 		struct v4l2_buffer *vbuf = &out_bufs[i].v4l2;
 		vbuf->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -343,8 +201,6 @@ static void m2m_buffers_get(int const fd) {
 		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query output buffer");
 		pr_debug("M2M: Got output buffer #%u: length = %u", i, vbuf->length);
 
-		//! \todo size field is not needed
-		//out_bufs[i].size = vbuf->length;
 		out_bufs[i].buf = mmap(NULL, vbuf->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, vbuf->m.offset);
 		if (out_bufs[i].buf == MAP_FAILED) error(EXIT_FAILURE, errno, "Can not mmap output buffer");
 	}
@@ -362,73 +218,6 @@ static void m2m_buffers_get(int const fd) {
 		cap_bufs[i].buf = mmap(NULL, vbuf->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, vbuf->m.offset);
 		if (cap_bufs[i].buf == MAP_FAILED) error(EXIT_FAILURE, errno, "Can not mmap capture buffer");
 	}
-
-	//next_input_frame();
-	/*for (int i = 0; i < outreqbuf.count; ++i) {
-		uint8_t *p_buf = (uint8_t *) buffer_sdl;
-		p_buf += (i % translen) * transsize;
-
-		gen_buf((uint8_t *) p_src_buf[i], p_buf, transsize);
-
-
-		memzero(buf);
-		buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		buf.memory = V4L2_MEMORY_MMAP;
-		buf.index = i;
-
-		ret = ioctl(mem2mem_fd, VIDIOC_QBUF, &buf);
-		perror_exit(ret != 0, "ioctl");
-	}
-
-	for (i = 0; i < num_dst_bufs; ++i)
-	{
-		memzero(buf);
-		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		buf.memory = V4L2_MEMORY_MMAP;
-		buf.index = i;
-
-		ret = ioctl(mem2mem_fd, VIDIOC_QBUF, &buf);
-		perror_exit(ret != 0, "ioctl");
-	}*/
-
-
-	/*while (num_frames)
-    {
-		fd_set read_fds;
-		int r;
-
-
-		while (SDL_PollEvent(&event))
-			if (event.type == SDL_QUIT)
-				return;
-
-
-		FD_ZERO(&read_fds);
-		FD_SET(mem2mem_fd, &read_fds);
-
-		debug("Before select");
-		r = select(mem2mem_fd + 1, &read_fds, NULL, NULL, 0);
-		perror_exit(r < 0, "select");
-		debug("After select");
-
-		if (num_frames == 1)
-			last = 1;
-		if (read_mem2mem_frame(last))
-		{
-			fprintf(stderr, "Read frame failed\n");
-			break;
-		}
-		--num_frames;
-		printf("FRAMES LEFT: %d\n", num_frames);
-	}
-
-	close(mem2mem_fd);
-
-	for (i = 0; i < num_src_bufs; ++i)
-		munmap(p_src_buf[i], src_buf_size[i]);
-
-	for (i = 0; i < num_dst_bufs; ++i)
-		munmap(p_dst_buf[i], dst_buf_size[i]);*/
 }
 
 static void m2m_streamon(int const fd) {
@@ -440,12 +229,10 @@ static void m2m_streamon(int const fd) {
 	type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	rc = ioctl(fd, VIDIOC_STREAMON, &type);
 	if (rc != 0) error(EXIT_FAILURE, errno, "Failed to start output stream");
-	//debug("STREAMON (%ld): %d\n", VIDIOC_STREAMON, ret);
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	rc = ioctl(fd, VIDIOC_STREAMON, &type);
 	if (rc != 0) error(EXIT_FAILURE, errno, "Failed to start capture stream");
-	//debug("STREAMON (%ld): %d\n", VIDIOC_STREAMON, ret);
 }
 
 static void m2m_process(int const fd, struct v4l2_buffer const *const out, struct v4l2_buffer const *const cap) {
@@ -473,7 +260,6 @@ static void help(const char *program_name) {
 	puts("    -s arg    From which frame processing should be started");
 	puts("    -t        Transform video to M420 [Avico-specific]");
 	puts("    -v        Be more verbose. Can be specified multiple times");
-	//puts("    -x        Show processed video [does not work]");
 }
 
 int main(int argc, char *argv[]) {
@@ -486,7 +272,6 @@ int main(int argc, char *argv[]) {
 	// AVCodec *oc; //!< Output codec
 	AVDictionary *options = NULL;
 	enum AVPixelFormat opf = AV_PIX_FMT_NONE; //!< Output pixel format
-	struct SwsContext *ssc; //!< SDL swscale context
 	struct SwsContext *dsc = NULL; //!< Device swscale context
 	struct SwsContext *osc = NULL; //!< Output swscale context
 	AVFrame *iframe = NULL; //!< Input frame
@@ -495,7 +280,6 @@ int main(int argc, char *argv[]) {
 	struct timespec start, stop, loopstart, loopstop;
 	int rc, opt;
 
-	// bool sdl_enable = false;
 	unsigned offset = 0, frames = UINT_MAX, total_time = 0, looptime;
 	char *framerate = NULL;
 	bool use_v4l2 = false, transform = false;
@@ -516,7 +300,6 @@ int main(int argc, char *argv[]) {
 			case 's': offset = atoi(optarg); break;
 			case 't': transform = true; break;
 			case 'v': vlevel++; break;
-			//case 'x': sdl_enable = true; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
 	}
@@ -576,12 +359,7 @@ int main(int argc, char *argv[]) {
 	iframe = av_frame_alloc();
 	if (iframe == NULL) error(EXIT_FAILURE, 0, "Can not allocate memory for input frame");
 
-	ssc = sws_getContext(icc->width, icc->height, icc->pix_fmt,
-			icc->width, icc->height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
-	if (ssc == NULL) error(EXIT_FAILURE, 0, "Can't allocate SDL swscale context");
-
 	enum AVPixelFormat format = AV_PIX_FMT_YUV420P;
-
 
 	//! \brief Device swscale context
 	//! \detail Is used to convert read frame to M2M device output pixel format.
@@ -637,19 +415,6 @@ int main(int argc, char *argv[]) {
 		avpicture_fill((AVPicture *)frame, out_bufs[i].buf, frame->format, frame->width, frame->height);
 	}
 
-	/*
-	for (int i = 0; cap_bufs[i].buf; i++) {
-		AVFrame *frame = cap_bufs[i].frame = av_frame_alloc();
-		if (!frame) error(EXIT_FAILURE, 0, "Not enough memory");
-
-		frame->format = format;
-		frame->width = icc->width;
-		frame->height = icc->height;
-
-		avpicture_fill((AVPicture *)frame, cap_bufs[i].buf, frame->format, frame->width, frame->height);
-	}
-	*/
-
 	/* if (output) {
 		avformat_alloc_output_context2(&ofc, NULL, NULL, output);
 		if (!ofc) error(EXIT_FAILURE, 0, "Can not allocate output context for %s", output);
@@ -682,30 +447,6 @@ int main(int argc, char *argv[]) {
 
 	AVPacket packet;
 
-#ifdef ENABLE_SDL
-	if (sdl_enable && SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER)) {
-		sdl_enable = false;
-		error(EXIT_SUCCESS, 0, "Could not initialize SDL: %s", SDL_GetError());
-	}
-
-	SDL_Surface *screen;
-	SDL_Overlay *overlay;
-	SDL_Rect rect;
-	SDL_Event event;
-
-	if (sdl_enable) {
-		screen = SDL_SetVideoMode(codec_context->width, codec_context->height, 0, 0);
-		if (!screen) {
-			sdl_enable = false;
-			error(EXIT_SUCCESS, 0, "Could not set SDL video mode");
-		}
-	}
-
-	if (sdl_enable) {
-		overlay = SDL_CreateYUVOverlay(codec_context->width, codec_context->height, SDL_IYUV_OVERLAY, screen);
-	}
-#endif
-
 //	rc = clock_getres(CLOCK_MONOTONIC, &start);
 
 	int64_t start_pts = 0, start_time = av_gettime();
@@ -734,34 +475,6 @@ int main(int argc, char *argv[]) {
 				pr_verb("Frame is read...");
 
 				if (!offset) {
-
-#ifdef ENABLE_SDL
-					if (sdl_enable) {
-						SDL_LockYUVOverlay(overlay);
-
-						AVPicture pict;
-						pict.data[0] = overlay->pixels[0];
-						pict.data[1] = overlay->pixels[1];
-						pict.data[2] = overlay->pixels[2];
-
-						pict.linesize[0] = overlay->pitches[0];
-						pict.linesize[1] = overlay->pitches[1];
-						pict.linesize[2] = overlay->pitches[2];
-
-						// Convert the image into YUV format that SDL uses
-						sws_scale(sws_ctx, (const uint8_t * const *)frame->data,
-								frame->linesize, 0, icc->height, pict.data, pict.linesize);
-
-						SDL_UnlockYUVOverlay(overlay);
-
-						rect.x = 0;
-						rect.y = 0;
-						rect.w = icc->width;
-						rect.h = icc->height;
-						SDL_DisplayYUVOverlay(overlay, &rect);
-					}
-#endif
-
 					sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
 
 					rc = clock_gettime(CLOCK_MONOTONIC, &start);
@@ -819,16 +532,6 @@ int main(int argc, char *argv[]) {
 		av_free_packet(&packet);
 
 		if (ofc) av_write_trailer(ofc);
-
-#ifdef ENABLE_SDL
-		if (sdl_enable) {
-			SDL_PollEvent(&event);
-			if (event.type == SDL_QUIT) {
-				SDL_Quit();
-				break;
-			}
-		}
-#endif
 	}
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstop);
@@ -842,19 +545,6 @@ int main(int argc, char *argv[]) {
 	pr_info("Total time in main loop: %.1f s (%.1f FPS)",
 			(float)looptime / 1000.0,
 			(float)(frame_number - offset) * 1000.0f / (float)looptime);
-
-	//SDL_SetVideoMode(WIDTH, HEIGHT * 2 + SEPARATOR, 16, SDL_HWSURFACE);
-
-	//data_sf = SDL_CreateRGBSurfaceFrom(buffer_sdl, WIDTH, HEIGHT, 16, WIDTH * 2, 0x1F00, 0xE007, 0x00F8, 0);
-
-	//data_m2m_sf = SDL_CreateRGBSurfaceFrom(buffer_m2m_sdl, WIDTH, HEIGHT, 16, WIDTH * 2, 0x1F00, 0xE007, 0x00F8, 0);
-
-	//SDL_SetEventFilter(sdl_filter);
-
-	//SDL_FreeSurface(data_sf);
-	//SDL_FreeSurface(data_m2m_sf);
-	//free(buffer_sdl);
-	//free(buffer_m2m_sdl);
 
 	return EXIT_SUCCESS;
 }
