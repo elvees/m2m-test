@@ -49,6 +49,11 @@
 
 #define NUM_BUFS 4
 
+/* Some evident defines */
+#define MSEC_IN_SEC 1000
+#define USEC_IN_SEC 1000000
+#define NSEC_IN_SEC 1000000000
+
 static struct m2m_buffer {
 	struct v4l2_buffer v4l2;
 	void *buf;
@@ -244,6 +249,145 @@ static void m2m_process(int const fd, struct v4l2_buffer const *const out, struc
 	ioctl(fd, VIDIOC_DQBUF, out);
 }
 
+static inline struct timespec timespec_subtract(struct timespec const start,
+		struct timespec const stop)
+{
+	struct timespec res = {
+		.tv_sec = stop.tv_sec - start.tv_sec,
+		.tv_nsec = stop.tv_nsec - start.tv_nsec
+	};
+
+	if (res.tv_nsec < 0) {
+		res.tv_sec -= 1;
+		res.tv_nsec += NSEC_IN_SEC;
+	}
+
+	return res;
+}
+
+static inline struct timespec timespec_add(struct timespec const x,
+		struct timespec const y)
+{
+	struct timespec res = {
+		.tv_sec = y.tv_sec + x.tv_sec,
+		.tv_nsec = y.tv_nsec + x.tv_nsec
+	};
+
+	if (res.tv_nsec > NSEC_IN_SEC) {
+		res.tv_sec += 1;
+		res.tv_nsec -= NSEC_IN_SEC;
+	}
+
+	return res;
+}
+
+static inline unsigned timespec2msec(struct timespec const t)
+{
+	return t.tv_sec * MSEC_IN_SEC + t.tv_nsec / (NSEC_IN_SEC / MSEC_IN_SEC);
+}
+
+static inline float timespec2float(struct timespec const t)
+{
+	return t.tv_sec + (float)t.tv_nsec / 1e9;
+}
+
+static inline bool checklimit(unsigned const value, unsigned const limit)
+{
+	return limit == 0 || value < limit;
+}
+
+static unsigned process_stream(AVFormatContext *const ifc, int const stream,
+		struct SwsContext *dsc, unsigned const offset, unsigned const frames,
+		bool const transform, int const m2mfd, int const outfd,
+		struct timespec *const m2mtime)
+{
+	static int64_t start_pts = 0;
+	static unsigned frame = 0, skipped = 0;
+
+	AVPacket packet;
+	int rc = 0, frame_read;
+	struct timespec start, stop, frametime;
+
+	AVFrame *iframe = av_frame_alloc();
+
+	if (iframe == NULL)
+		error(EXIT_FAILURE, 0, "Can not allocate memory for input frame");
+
+	while (checklimit(frame, frames) && (rc = av_read_frame(ifc, &packet)) == 0) {
+		if (!start_pts) start_pts = packet.pts;
+
+		if (packet.stream_index != stream)
+			goto forth;
+
+		avcodec_decode_video2(ifc->streams[stream]->codec, iframe, &frame_read, &packet);
+		if (!frame_read)
+			goto forth;
+
+		pr_verb("Frame is read...");
+
+		if (skipped < offset) {
+			skipped++;
+			pr_verb("Frame skipped!");
+			goto forth;
+		}
+
+		sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
+
+		rc = clock_gettime(CLOCK_MONOTONIC, &start);
+
+		// Process frame
+		if (transform) yuv420_to_m420(out_bufs[0].frame);
+		out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
+
+		m2m_process(m2mfd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
+		rc = clock_gettime(CLOCK_MONOTONIC, &stop);
+
+		frametime = timespec_subtract(start, stop);
+		*m2mtime = timespec_add(*m2mtime, frametime);
+
+		pr_info("Frame %u (%u bytes): %u ms", frame, cap_bufs[0].v4l2.bytesused, timespec2msec(frametime));
+
+		if (outfd >= 0)
+			if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
+				error(EXIT_FAILURE, errno, "Can not write to output");
+
+		/*if (ofc) {
+			AVPacket packet = { };
+			int finished;
+
+			if (osc) sws_scale(osc, (uint8_t const* const*)cap_bufs[0].frame->data, cap_bufs[0].frame->linesize, 0, cap_bufs[0].frame->height,
+					oframe->data, oframe->linesize);
+
+			av_init_packet(&packet);
+			packet.stream_index = 0;
+
+			// \todo Use processed video
+			rc = avcodec_encode_video2(occ, &packet, oframe ?: cap_bufs[0].frame, &finished);
+			if (rc < 0) error(EXIT_FAILURE, 0, "Can not encode frame");
+
+			if (finished) {
+				rc = av_interleaved_write_frame(ofc, &packet);
+				if (rc < 0) error(EXIT_FAILURE, 0, "Can not write output packet");
+			}
+		}*/
+
+		frame += 1;
+
+forth:
+		// Free the packet that was allocated by av_read_frame
+		av_free_packet(&packet);
+
+		/* if (ofc) av_write_trailer(ofc); */
+	}
+
+	if (rc < 0 && rc != AVERROR_EOF)
+		error(EXIT_FAILURE, 0, "FFmpeg failed to read next packet: %d", rc);
+
+	av_frame_free(&iframe);
+
+	return frame;
+}
+
 #ifndef VERSION
 #define VERSION "unversioned"
 #endif
@@ -254,6 +398,7 @@ static void help(const char *program_name) {
 	puts("Options:");
 	puts("    -d arg    Specify M2M device to use [mandatory]");
 	puts("    -f arg    Output file descriptor number");
+	puts("    -l arg    Loop over input file (-1 means infinitely)");
 	puts("    -n arg    Specify how many frames should be processed");
 	puts("    -o arg    Output file name (takes precedence over -f)");
 	puts("    -p arg    Specify output pixel format for M2M device");
@@ -265,7 +410,7 @@ static void help(const char *program_name) {
 
 int main(int argc, char *argv[]) {
 	AVFormatContext *ifc; //!< Input format context
-	AVFormatContext *ofc = NULL; //!< Output format context
+	/* AVFormatContext *ofc = NULL; //!< Output format context */
 	AVInputFormat *ifmt = NULL; //!< Input format
 	AVCodecContext *icc; //!< Input codec context
 	//AVCodecContext *occ; //!< Output codec context
@@ -275,27 +420,27 @@ int main(int argc, char *argv[]) {
 	enum AVPixelFormat opf = AV_PIX_FMT_NONE; //!< Output pixel format
 	struct SwsContext *dsc = NULL; //!< Device swscale context
 	struct SwsContext *osc = NULL; //!< Output swscale context
-	AVFrame *iframe = NULL; //!< Input frame
 	AVFrame *oframe = NULL; //!< Output frame
 
-	struct timespec start, stop, loopstart, loopstop;
+	struct timespec loopstart, loopstop, looptime, m2mtime = { 0 };
 	int rc, opt;
-	int outfd = -1;
+	int m2mfd, outfd = -1;
 
-	unsigned offset = 0, frames = UINT_MAX, total_time = 0, looptime;
+	unsigned offset = 0, frames = 0, loops = 1;
 	char *framerate = NULL;
-	bool use_v4l2 = false, transform = false;
+	bool transform = false;
 
 	char const *output = NULL, *device = NULL;
 	char const *opfn = NULL; //!< Output pixel format name
 
 	av_register_all();
 
-	while ((opt = getopt(argc, argv, "d:f:hn:o:p:r:s:tv")) != -1) {
+	while ((opt = getopt(argc, argv, "d:f:hl:n:o:p:r:s:tv")) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
 			case 'f': outfd = atoi(optarg); break;
 			case 'h': help(argv[0]); return EXIT_SUCCESS;
+			case 'l': loops = atoi(optarg); break;
 			case 'n': frames = atoi(optarg); break;
 			case 'o': output = optarg; break;
 			case 'p': opfn = optarg; break;
@@ -311,12 +456,6 @@ int main(int argc, char *argv[]) {
 	if (device == NULL) error(EXIT_FAILURE, 0, "You must specify device");
 
 	char const *input = argv[optind];
-
-	if (strncmp(input, "/dev/video", 10) == 0) {
-		use_v4l2 = true; offset = 0;
-		ifmt = av_find_input_format("v4l2");
-		if (!ifmt) error(EXIT_FAILURE, 0, "Unknown input format: 'v4l2'");
-	}
 
 	if (framerate && ifmt && ifmt->priv_class &&
 			av_opt_find(&ifmt->priv_class, "framerate", NULL, 0, AV_OPT_SEARCH_FAKE_OBJ)) {
@@ -359,9 +498,6 @@ int main(int argc, char *argv[]) {
 	if (avcodec_open2(icc, ic, NULL) < 0)
 		error(EXIT_FAILURE, 0, "Could not open codec");
 
-	iframe = av_frame_alloc();
-	if (iframe == NULL) error(EXIT_FAILURE, 0, "Can not allocate memory for input frame");
-
 	enum AVPixelFormat format = AV_PIX_FMT_YUV420P;
 
 	//! \brief Device swscale context
@@ -387,19 +523,18 @@ int main(int argc, char *argv[]) {
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not allocate output frame buffers");
 	}
 
-	int m2m_fd;
 	char card[32];
 
-	m2m_fd = m2m_init(device, card);
+	m2mfd = m2m_init(device, card);
 	pr_info("Card: %.32s", card);
 
 	if (strncmp(card, "vim2m", 32) == 0) {
-		m2m_vim2m_controls(m2m_fd);
+		m2m_vim2m_controls(m2mfd);
 	}
 
-	m2m_configure(m2m_fd, icc->width, icc->height);
-	m2m_buffers_get(m2m_fd);
-	m2m_streamon(m2m_fd);
+	m2m_configure(m2mfd, icc->width, icc->height);
+	m2m_buffers_get(m2mfd);
+	m2m_streamon(m2mfd);
 
 	pr_verb("Allocating AVFrames for obtained buffers...");
 
@@ -454,109 +589,33 @@ int main(int argc, char *argv[]) {
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not write header for output file");
 	} */
 
-	AVPacket packet;
-
-//	rc = clock_getres(CLOCK_MONOTONIC, &start);
-
-	int64_t start_pts = 0, start_time = av_gettime();
-	bool valid = true;
-	unsigned int frame_number = offset;
-	int frame_read;
+	unsigned int frame = 0;
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstart);
 	pr_verb("Begin processing...");
 
-	while (av_read_frame(ifc, &packet) >= 0) {
-		// Is this a packet from the video stream
+	for (unsigned loop = 0; checklimit(loop, loops) && checklimit(frame, frames); loop++) {
+		pr_verb("Loop #%u", loop);
 
-		if (!start_pts) start_pts = packet.pts;
-
-		if (use_v4l2 && packet.pts - start_pts + packet.duration < av_gettime() - start_time) {
-			valid = false;
-			pr_info("Frame dropped");
-		} else valid = true;
-
-		if (packet.stream_index != video_stream_number || !valid)
-			goto forth;
-
-		avcodec_decode_video2(icc, iframe, &frame_read, &packet);
-		if (!frame_read)
-			goto forth;
-
-		pr_verb("Frame is read...");
-
-		if (offset) {
-			offset--;
-			pr_info("Frame skipped!\n");
-			goto forth;
+		if (loop != 0) {
+			rc = avformat_seek_file(ifc, video_stream_number, 0, 0, 0,
+					AVSEEK_FLAG_FRAME);
+			if (rc < 0)
+				error(EXIT_FAILURE, 0, "Can not rewind input file: %d", rc);
 		}
 
-		sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
-
-		rc = clock_gettime(CLOCK_MONOTONIC, &start);
-
-		// Process frame
-		if (transform) yuv420_to_m420(out_bufs[0].frame);
-		out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
-
-		m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
-		rc = clock_gettime(CLOCK_MONOTONIC, &stop);
-
-		unsigned msec = (stop.tv_sec - start.tv_sec)*1000U +
-				(unsigned)((stop.tv_nsec - start.tv_nsec)/1000000L);
-		total_time += msec;
-
-		pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
-
-		if (outfd >= 0)
-			if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
-				error(EXIT_FAILURE, errno, "Can not write to output");
-
-		/*if (ofc) {
-			AVPacket packet = { };
-			int finished;
-
-			if (osc) sws_scale(osc, (uint8_t const* const*)cap_bufs[0].frame->data, cap_bufs[0].frame->linesize, 0, cap_bufs[0].frame->height,
-					oframe->data, oframe->linesize);
-
-			av_init_packet(&packet);
-			packet.stream_index = 0;
-
-			// \todo Use processed video
-			rc = avcodec_encode_video2(occ, &packet, oframe ?: cap_bufs[0].frame, &finished);
-			if (rc < 0) error(EXIT_FAILURE, 0, "Can not encode frame");
-
-			if (finished) {
-				rc = av_interleaved_write_frame(ofc, &packet);
-				if (rc < 0) error(EXIT_FAILURE, 0, "Can not write output packet");
-			}
-		}*/
-
-		frame_number += 1;
-
-		--frames;
-		/* \bug If I delete following line, I catch SEGV! Strange... */
-		pr_debug("-- frames = %u\n", frames);
-		if (frames == 0) break;
-
-forth:
-		// Free the packet that was allocated by av_read_frame
-		av_free_packet(&packet);
-
-		if (ofc) av_write_trailer(ofc);
+		frame = process_stream(ifc, video_stream_number, dsc, offset, frames,
+				transform, m2mfd, outfd, &m2mtime);
 	}
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstop);
-	looptime = (loopstop.tv_sec - loopstart.tv_sec)*1000U +
-			(unsigned)((loopstop.tv_nsec - loopstart.tv_nsec)/1000000L);
+	looptime = timespec_subtract(loopstart, loopstop);
 
 	pr_info("Total time in M2M: %.1f s (%.1f FPS)",
-			(float)total_time / 1000.0,
-			(float)(frame_number - offset) * 1000.0f / (float)total_time);
+			timespec2float(m2mtime), frame / timespec2float(m2mtime));
 
 	pr_info("Total time in main loop: %.1f s (%.1f FPS)",
-			(float)looptime / 1000.0,
-			(float)(frame_number - offset) * 1000.0f / (float)looptime);
+			timespec2float(looptime), frame / timespec2float(looptime));
 
 	if (outfd >= 0)
 		close(outfd);
