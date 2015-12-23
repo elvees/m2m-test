@@ -461,6 +461,7 @@ int main(int argc, char *argv[]) {
 	int64_t start_pts = 0, start_time = av_gettime();
 	bool valid = true;
 	unsigned int frame_number = offset;
+	int frame_read;
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstart);
 	pr_verb("Begin processing...");
@@ -475,68 +476,70 @@ int main(int argc, char *argv[]) {
 			pr_info("Frame dropped");
 		} else valid = true;
 
-		if (packet.stream_index == video_stream_number && valid) {
-			int frame_read;
+		if (packet.stream_index != video_stream_number || !valid)
+			goto forth;
 
-			avcodec_decode_video2(icc, iframe, &frame_read, &packet);
+		avcodec_decode_video2(icc, iframe, &frame_read, &packet);
+		if (!frame_read)
+			goto forth;
 
-			if (frame_read) {
-				pr_verb("Frame is read...");
+		pr_verb("Frame is read...");
 
-				if (!offset) {
-					sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
-
-					rc = clock_gettime(CLOCK_MONOTONIC, &start);
-
-					// Process frame
-					if (transform) yuv420_to_m420(out_bufs[0].frame);
-					out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
-
-					m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
-					rc = clock_gettime(CLOCK_MONOTONIC, &stop);
-
-					unsigned msec = (stop.tv_sec - start.tv_sec)*1000U +
-							(unsigned)((stop.tv_nsec - start.tv_nsec)/1000000L);
-					total_time += msec;
-
-					pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
-
-					if (outfd >= 0)
-						if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
-							error(EXIT_FAILURE, errno, "Can not write to output");
-
-					/*if (ofc) {
-						AVPacket packet = { };
-						int finished;
-
-						if (osc) sws_scale(osc, (uint8_t const* const*)cap_bufs[0].frame->data, cap_bufs[0].frame->linesize, 0, cap_bufs[0].frame->height,
-								oframe->data, oframe->linesize);
-
-						av_init_packet(&packet);
-						packet.stream_index = 0;
-
-						// \todo Use processed video
-						rc = avcodec_encode_video2(occ, &packet, oframe ?: cap_bufs[0].frame, &finished);
-						if (rc < 0) error(EXIT_FAILURE, 0, "Can not encode frame");
-
-						if (finished) {
-							rc = av_interleaved_write_frame(ofc, &packet);
-							if (rc < 0) error(EXIT_FAILURE, 0, "Can not write output packet");
-						}
-					}*/
-
-					frame_number += 1;
-
-					--frames;
-					pr_debug("-- frames = %u\n", frames);
-					if (frames == 0) break;
-				} else {
-					offset--;
-					pr_info("Frame skipped!\n");
-				}
-			}
+		if (offset) {
+			offset--;
+			pr_info("Frame skipped!\n");
+			goto forth;
 		}
 
+		sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
+
+		rc = clock_gettime(CLOCK_MONOTONIC, &start);
+
+		// Process frame
+		if (transform) yuv420_to_m420(out_bufs[0].frame);
+		out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
+
+		m2m_process(m2m_fd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
+		rc = clock_gettime(CLOCK_MONOTONIC, &stop);
+
+		unsigned msec = (stop.tv_sec - start.tv_sec)*1000U +
+				(unsigned)((stop.tv_nsec - start.tv_nsec)/1000000L);
+		total_time += msec;
+
+		pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
+
+		if (outfd >= 0)
+			if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
+				error(EXIT_FAILURE, errno, "Can not write to output");
+
+		/*if (ofc) {
+			AVPacket packet = { };
+			int finished;
+
+			if (osc) sws_scale(osc, (uint8_t const* const*)cap_bufs[0].frame->data, cap_bufs[0].frame->linesize, 0, cap_bufs[0].frame->height,
+					oframe->data, oframe->linesize);
+
+			av_init_packet(&packet);
+			packet.stream_index = 0;
+
+			// \todo Use processed video
+			rc = avcodec_encode_video2(occ, &packet, oframe ?: cap_bufs[0].frame, &finished);
+			if (rc < 0) error(EXIT_FAILURE, 0, "Can not encode frame");
+
+			if (finished) {
+				rc = av_interleaved_write_frame(ofc, &packet);
+				if (rc < 0) error(EXIT_FAILURE, 0, "Can not write output packet");
+			}
+		}*/
+
+		frame_number += 1;
+
+		--frames;
+		/* \bug If I delete following line, I catch SEGV! Strange... */
+		pr_debug("-- frames = %u\n", frames);
+		if (frames == 0) break;
+
+forth:
 		// Free the packet that was allocated by av_read_frame
 		av_free_packet(&packet);
 
