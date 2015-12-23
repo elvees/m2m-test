@@ -253,9 +253,10 @@ static void help(const char *program_name) {
 	printf("Synopsys: %s -d device [options] file | /dev/videoX\n\n", program_name);
 	puts("Options:");
 	puts("    -d arg    Specify M2M device to use [mandatory]");
-	puts("    -f arg    Specify output pixel format for M2M device");
+	puts("    -f arg    Output file descriptor number");
 	puts("    -n arg    Specify how many frames should be processed");
-	puts("    -o arg    Output file name");
+	puts("    -o arg    Output file name (takes precedence over -f)");
+	puts("    -p arg    Specify output pixel format for M2M device");
 	puts("    -r arg    When grabbing from camera specify desired framerate");
 	puts("    -s arg    From which frame processing should be started");
 	puts("    -t        Transform video to M420 [Avico-specific]");
@@ -279,6 +280,7 @@ int main(int argc, char *argv[]) {
 
 	struct timespec start, stop, loopstart, loopstop;
 	int rc, opt;
+	int outfd = -1;
 
 	unsigned offset = 0, frames = UINT_MAX, total_time = 0, looptime;
 	char *framerate = NULL;
@@ -289,13 +291,14 @@ int main(int argc, char *argv[]) {
 
 	av_register_all();
 
-	while ((opt = getopt(argc, argv, "d:f:hn:o:r:s:tv")) != -1) {
+	while ((opt = getopt(argc, argv, "d:f:hn:o:p:r:s:tv")) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
-			case 'f': opfn = optarg; break;
+			case 'f': outfd = atoi(optarg); break;
 			case 'h': help(argv[0]); return EXIT_SUCCESS;
 			case 'n': frames = atoi(optarg); break;
 			case 'o': output = optarg; break;
+			case 'p': opfn = optarg; break;
 			case 'r': framerate = optarg; break;
 			case 's': offset = atoi(optarg); break;
 			case 't': transform = true; break;
@@ -415,6 +418,12 @@ int main(int argc, char *argv[]) {
 		avpicture_fill((AVPicture *)frame, out_bufs[i].buf, frame->format, frame->width, frame->height);
 	}
 
+	if (output) {
+		outfd = creat(output, S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR);
+		if (outfd < 0)
+			error(EXIT_FAILURE, errno, "Can not open output file");
+	}
+
 	/* if (output) {
 		avformat_alloc_output_context2(&ofc, NULL, NULL, output);
 		if (!ofc) error(EXIT_FAILURE, 0, "Can not allocate output context for %s", output);
@@ -492,9 +501,9 @@ int main(int argc, char *argv[]) {
 
 					pr_info("Frame %u (%u bytes): %u ms", frame_number, cap_bufs[0].v4l2.bytesused, msec);
 
-					static FILE *f;
-					if (!f && output) f = fopen(output, "w");
-					if (f) fwrite(cap_bufs[0].buf, 1, cap_bufs[0].v4l2.bytesused, f);
+					if (outfd >= 0)
+						if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
+							error(EXIT_FAILURE, errno, "Can not write to output");
 
 					/*if (ofc) {
 						AVPacket packet = { };
@@ -545,6 +554,9 @@ int main(int argc, char *argv[]) {
 	pr_info("Total time in main loop: %.1f s (%.1f FPS)",
 			(float)looptime / 1000.0,
 			(float)(frame_number - offset) * 1000.0f / (float)looptime);
+
+	if (outfd >= 0)
+		close(outfd);
 
 	return EXIT_SUCCESS;
 }
