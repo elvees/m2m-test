@@ -9,10 +9,10 @@ include_directories(${FFMPEG_INCLUDE_DIRS})
 set(CMAKE_C_FLAGS "-std=gnu99 -Wall")
 add_definitions(-DVERSION="v1.2")
 
-add_executable(m2m-test m2m-test.c m420.c)
+add_executable(m2m-test m2m-test.c log.c v4l2-utils.c m420.c)
 target_link_libraries(m2m-test ${FFMPEG_LIBRARIES})
 
-add_executable(any2m420 any2m420.c m420.c)
+add_executable(any2m420 any2m420.c log.c m420.c)
 target_link_libraries(any2m420 ${FFMPEG_LIBRARIES})
 
 add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)

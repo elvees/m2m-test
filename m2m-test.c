@@ -2,7 +2,7 @@
  * Copyright (C) 2009 by Pawel Osciak, p.osciak <at> samsung.com
  * Copyright (C) 2009 by Samsung Electronics Co., Ltd.
  * Copyright (C) 2012 by Tomasz Moń <desowin@gmail.com>
- * Copyright (C) 2015 by Anton Leontiev <aleontiev@elvees.com>
+ * Copyright (C) 2015-2016 by Anton Leontiev <aleontiev@elvees.com>
  *
  * Based on V4L2 video capture example and process-vmalloc.c
  * Capture + output (process) V4L2 device tester.
@@ -43,6 +43,8 @@
 #include <libavutil/time.h>
 
 #include "m420.h"
+#include "log.h"
+#include "v4l2-utils.h"
 
 #define V4L2_CID_TRANS_TIME_MSEC (V4L2_CID_PRIVATE_BASE)
 #define V4L2_CID_TRANS_NUM_BUFS  (V4L2_CID_PRIVATE_BASE + 1)
@@ -59,52 +61,6 @@ static struct m2m_buffer {
 	void *buf;
 	AVFrame *frame;
 } out_bufs[NUM_BUFS], cap_bufs[NUM_BUFS];
-
-enum loglevel {
-	LOG_ERROR,
-	LOG_WARNING,
-	LOG_INFO,
-	LOG_VERBOSE,
-	LOG_DEBUG
-};
-
-static enum loglevel vlevel = LOG_WARNING;
-
-static void pr_level(enum loglevel const level, char const *format, ...) {
-	if (level <= vlevel) {
-		va_list va;
-		va_start(va, format);
-		vfprintf(level < LOG_INFO ? stderr : stdout, format, va);
-		putchar('\n');
-		va_end(va);
-	}
-}
-
-#define pr_err(format, ...)   pr_level(LOG_ERROR, format, ##__VA_ARGS__)
-#define pr_warn(format, ...)  pr_level(LOG_WARNING, format, ##__VA_ARGS__)
-#define pr_info(format, ...)  pr_level(LOG_INFO, format, ##__VA_ARGS__)
-#define pr_verb(format, ...)  pr_level(LOG_VERBOSE, format, ##__VA_ARGS__)
-#define pr_debug(format, ...) pr_level(LOG_DEBUG, format, ##__VA_ARGS__)
-
-static int m2m_init(char const *const device, char card[32]) {
-	int ret;
-	struct v4l2_capability cap;
-
-	pr_verb("M2M: Open device...");
-
-	int fd = open(device, O_RDWR, 0);
-	if (fd < 0) error(EXIT_FAILURE, errno, "Can not open %s", device);
-
-	ret = ioctl(fd, VIDIOC_QUERYCAP, &cap);
-	if (ret != 0) error(EXIT_FAILURE, errno, "ioctl");
-
-	if (!(cap.capabilities & V4L2_CAP_VIDEO_M2M))
-		error(EXIT_FAILURE, 0, "Device %s does not support memory-to-memory interface", device);
-
-	if (card) memcpy(card, cap.card, 32);
-
-	return fd;
-}
 
 static void m2m_vim2m_controls(int const fd) {
 	bool hflip = false, vflip = false;
@@ -136,37 +92,6 @@ static void m2m_vim2m_controls(int const fd) {
 	ctrl.value = 1;
 	rc = ioctl(fd, VIDIOC_S_CTRL, &ctrl);
 	if (rc != 0) error(EXIT_SUCCESS, errno, "Can not set transaction length");
-}
-
-static void m2m_configure(int const fd, int const width, int const height) {
-	int rc;
-	struct v4l2_format fmt;
-
-	pr_verb("M2M: Setup formats...");
-
-	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-	fmt.fmt.pix.width = width;
-	fmt.fmt.pix.height = height;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_M420;
-	fmt.fmt.pix.field = V4L2_FIELD_ANY;
-
-	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
-	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set output format");
-
-	pr_debug("M2M: Output configured: width = %u, height = %u, sizeimage = %u",
-			fmt.fmt.pix.width, fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
-
-	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width = width;
-	fmt.fmt.pix.height = height;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
-	fmt.fmt.pix.field = V4L2_FIELD_ANY;
-
-	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
-	if (rc != 0) error(EXIT_FAILURE, 0, "Can not set output format");
-
-	pr_debug("M2M: Capture configured: width = %u, height = %u, sizeimage = %u",
-			fmt.fmt.pix.width, fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
 }
 
 static void m2m_buffers_get(int const fd) {
@@ -223,21 +148,6 @@ static void m2m_buffers_get(int const fd) {
 		cap_bufs[i].buf = mmap(NULL, vbuf->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, vbuf->m.offset);
 		if (cap_bufs[i].buf == MAP_FAILED) error(EXIT_FAILURE, errno, "Can not mmap capture buffer");
 	}
-}
-
-static void m2m_streamon(int const fd) {
-	int rc;
-	enum v4l2_buf_type type;
-
-	pr_verb("M2M: Stream on...");
-
-	type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-	rc = ioctl(fd, VIDIOC_STREAMON, &type);
-	if (rc != 0) error(EXIT_FAILURE, errno, "Failed to start output stream");
-
-	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	rc = ioctl(fd, VIDIOC_STREAMON, &type);
-	if (rc != 0) error(EXIT_FAILURE, errno, "Failed to start capture stream");
 }
 
 static void m2m_process(int const fd, struct v4l2_buffer const *const out, struct v4l2_buffer const *const cap) {
@@ -525,16 +435,22 @@ int main(int argc, char *argv[]) {
 
 	char card[32];
 
-	m2mfd = m2m_init(device, card);
+	m2mfd = v4l2_open(device, V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING, 0, card);
 	pr_info("Card: %.32s", card);
 
 	if (strncmp(card, "vim2m", 32) == 0) {
 		m2m_vim2m_controls(m2mfd);
 	}
 
-	m2m_configure(m2mfd, icc->width, icc->height);
+	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420,
+			icc->width, icc->height);
+	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264,
+			icc->width, icc->height);
+
 	m2m_buffers_get(m2mfd);
-	m2m_streamon(m2mfd);
+
+	v4l2_streamon(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT);
+	v4l2_streamon(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 
 	pr_verb("Allocating AVFrames for obtained buffers...");
 

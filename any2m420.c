@@ -1,12 +1,10 @@
 /*
- * Copyright (C) 2015 by Anton Leontiev <aleontiev@elvees.com>
- *
  * Tool to convert any video to prepared Y4M in M420 pixel format.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by the
- * Free Software Foundation; either version 2 of the License, or (at your
- * option) any later version
+ * Copyright (C) 2015-2016 ELVEES NeoTek JSC
+ * Author: Anton Leontiev <aleontiev@elvees.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0
  */
 
 #include <stdbool.h>
@@ -27,34 +25,8 @@
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 
+#include "log.h"
 #include "m420.h"
-
-enum loglevel {
-	LOG_ERROR,
-	LOG_WARNING,
-	LOG_INFO,
-	LOG_VERBOSE,
-	LOG_DEBUG
-};
-
-static enum loglevel vlevel = LOG_WARNING;
-
-static void pr_level(enum loglevel const level, char const *format, ...) {
-	if (level <= vlevel) {
-		va_list va;
-		FILE *const stream = level < LOG_INFO ? stderr : stdout;
-		va_start(va, format);
-		vfprintf(stream, format, va);
-		fputc('\n', stream);
-		va_end(va);
-	}
-}
-
-#define pr_err(format, ...)   pr_level(LOG_ERROR, format, ##__VA_ARGS__)
-#define pr_warn(format, ...)  pr_level(LOG_WARNING, format, ##__VA_ARGS__)
-#define pr_info(format, ...)  pr_level(LOG_INFO, format, ##__VA_ARGS__)
-#define pr_verb(format, ...)  pr_level(LOG_VERBOSE, format, ##__VA_ARGS__)
-#define pr_debug(format, ...) pr_level(LOG_DEBUG, format, ##__VA_ARGS__)
 
 #ifndef VERSION
 #define VERSION "unversioned"
