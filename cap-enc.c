@@ -161,12 +161,10 @@ int main(int argc, char *argv[])
 	};
 
 	while (checklimit(encframe, frames)) {
-		int rc = poll(fds, 2, -1);
+		int rc = poll(fds, 2, 1000);
 		if (rc < 0) break;
-		if (rc == 0) {
-			pr_verb("Timeout waiting for event. Trying more...");
-			continue;
-		};
+		if (rc == 0)
+			error(EXIT_FAILURE, 0, "Timeout waiting for data...");
 
 		if (fds[0].revents & POLLIN) {
 			struct v4l2_buffer buf = {
