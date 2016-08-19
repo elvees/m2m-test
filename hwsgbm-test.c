@@ -202,11 +202,29 @@ static inline bool checklimit(unsigned const value, unsigned const limit)
 	return limit == 0 || value < limit;
 }
 
+int write_y4m(int outfd, const void *buf, size_t nbyte, const char *chroma)
+{
+	int ret;
+
+	ret = dprintf(outfd, "FRAME\n");
+	if (ret < 0)
+		return ret;
+	ret = write(outfd, buf, nbyte);
+	if (ret != nbyte)
+		return ret;
+	ret = write(outfd, chroma, nbyte / 2);
+	if (ret != nbyte)
+		return ret;
+	return 0;
+}
+
+
 static unsigned process_stream(
 	AVFormatContext * const ifcl, int const vstreaml,
 	AVFormatContext * const ifcr, int const vstreamr,
 	struct SwsContext *dsc, unsigned const offset,
 	unsigned const frames, int const m2mfd, int const outfd,
+	char *chroma,
 	struct timespec *const m2mtime)
 {
 	static unsigned frame, skipped;
@@ -290,11 +308,10 @@ static unsigned process_stream(
 
 
 		if (outfd >= 0)
-			if (write(outfd, cap_bufs[0].buf,
-				  cap_bufs[0].v4l2.bytesused) < 0)
+			if (write_y4m(outfd, cap_bufs[0].buf,
+				      cap_bufs[0].v4l2.bytesused, chroma))
 				error(EXIT_FAILURE, errno,
-				      "Can not write to output");
-
+				      "Can't write to output");
 		frame += 1;
 
 forth:
@@ -338,15 +355,15 @@ int main(int argc, char *argv[])
 	AVCodecContext *iccl, *iccr;
 	AVCodec *icl, *icr;
 	struct SwsContext *dsc = NULL;
-	AVFrame *oframe = NULL;
 
 	struct timespec loopstart, loopstop, looptime, m2mtime = { 0 };
-	int rc, opt;
+	int rc, opt, ret = 0;
 	int m2mfd, outfd = -1;
 
-	unsigned offset = 0, frames = 0, loops = 1;
+	unsigned int rwidth, rheight, offset = 0, frames = 0, loops = 1;
 
 	char const *output = NULL, *device = NULL;
+	char *chroma = NULL;
 
 	av_register_all();
 
@@ -454,9 +471,15 @@ int main(int argc, char *argv[])
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_NV21,
 			iccl->width, iccl->height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_GREY,
-			iccl->width, iccl->height);
+			0, 0);
+	v4l2_getformat(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, NULL,
+		       &rwidth, &rheight)
 
 	m2m_buffers_get(m2mfd);
+	chroma = malloc(rwidth * rheight / 2);
+	if (chroma == NULL)
+		error(EXIT_FAILURE, 0, "Can't alloc frame color array");
+	memset(chroma, 0x80, rwidth * rheight / 2);
 
 	v4l2_streamon(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT);
 	v4l2_streamon(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE);
@@ -487,6 +510,12 @@ int main(int argc, char *argv[])
 		outfd = creat(output, S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR);
 		if (outfd < 0)
 			error(EXIT_FAILURE, errno, "Can not open output file");
+		ret = dprintf(outfd,
+				"YUV4MPEG2 W%d H%d F25:1 A0:0 C420 XYSCS=420\n",
+				rwidth, rheight)
+		if (ret < 0)
+			error(EXIT_FAILURE, errno,
+				"Can't write to output file");
 	}
 
 	unsigned int frame = 0;
@@ -514,7 +543,7 @@ int main(int argc, char *argv[])
 		frame = process_stream(ifcl, vid_str_num_l,
 				       ifcr, vid_str_num_r,
 				       dsc, offset, frames,
-				       m2mfd, outfd, &m2mtime);
+				       m2mfd, outfd, chroma, &m2mtime);
 	}
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstop);
@@ -528,6 +557,8 @@ int main(int argc, char *argv[])
 
 	if (outfd >= 0)
 		close(outfd);
+
+	free(chroma);
 
 	return EXIT_SUCCESS;
 }
