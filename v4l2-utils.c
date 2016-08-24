@@ -253,9 +253,9 @@ void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 	if (fmt.fmt.pix.pixelformat != pixelformat)
 		error(EXIT_FAILURE, 0, "Can not set requested pixel format");
 
-	pr_debug("V4L2: Configured: pixelformat = %.4s, width = %u, height = %u,"
-			" sizeimage = %u", (char *)&fmt.fmt.pix.pixelformat,
-			fmt.fmt.pix.width, fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
+	pr_debug("V4L2: Configured: pixelformat = %.4s, width = %u, height = %u, sizeimage = %u",
+		 (char *)&fmt.fmt.pix.pixelformat, fmt.fmt.pix.width,
+		 fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
 
 	v4l2_print_format(&fmt);
 }
