@@ -23,6 +23,9 @@ int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 		uint32_t const pixelformat, uint32_t const width,
 		uint32_t const height);
+void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
+	uint32_t *pixelformat, uint32_t *width,
+	uint32_t *height);
 void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
 		unsigned const framerate);
 float v4l2_framerate_get(int const fd, enum v4l2_buf_type const type);

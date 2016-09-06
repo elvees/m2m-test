@@ -247,7 +247,8 @@ void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 	if (rc != 0)
 		error(EXIT_FAILURE, 0, "Can not set %s format", v4l2_type_name(type));
 
-	if (fmt.fmt.pix.width != width || fmt.fmt.pix.height != height)
+	if ((fmt.fmt.pix.width != width && width) ||
+			(fmt.fmt.pix.height != height && height))
 		error(EXIT_FAILURE, 0, "Can not set requested size");
 
 	if (fmt.fmt.pix.pixelformat != pixelformat)
@@ -259,6 +260,34 @@ void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 
 	v4l2_print_format(&fmt);
 }
+
+void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
+		uint32_t *pixelformat, uint32_t *width,
+		uint32_t *height)
+{
+	int rc;
+	struct v4l2_format fmt = {
+		.type = type,
+		.fmt.pix.field = V4L2_FIELD_ANY
+	};
+
+	pr_verb("V4L2: Setup format for %d %s", fd, v4l2_type_name(type));
+
+	rc = ioctl(fd, VIDIOC_G_FMT, &fmt);
+	if (rc != 0)
+		error(EXIT_FAILURE, 0,
+		      "Can not set %s format", v4l2_type_name(type));
+
+	if (width != NULL)
+		*width = fmt.fmt.pix.width;
+	if (height != NULL)
+		*height = fmt.fmt.pix.height;
+	if (pixelformat != NULL)
+		*pixelformat = fmt.fmt.pix.pixelformat;
+
+	v4l2_print_format(&fmt);
+}
+
 
 void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
 		unsigned const framerate)
