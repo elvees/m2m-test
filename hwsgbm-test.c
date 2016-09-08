@@ -237,8 +237,8 @@ static int get_next_frame(AVFormatContext *const fc, AVCodecContext *const cc,
 }
 
 static unsigned process_stream(
-	AVFormatContext * const ifcl, int const vstreaml,
-	AVFormatContext * const ifcr, int const vstreamr,
+	AVFormatContext * const ifcl, AVCodecContext *const iccl, int const vstreaml,
+	AVFormatContext * const ifcr, AVCodecContext *const iccr, int const vstreamr,
 	struct SwsContext *dsc, unsigned const offset,
 	unsigned const frames, int const m2mfd, int const outfd,
 	char *chroma,
@@ -258,11 +258,11 @@ static unsigned process_stream(
 		      "Can't allocate memory for input frame");
 
 	while (checklimit(frame, frames)) {
-		rc = get_next_frame(ifcl, ifcl->streams[vstreaml]->codec, iframel, packetl);
+		rc = get_next_frame(ifcl, iccl, iframel, packetl);
 		if (rc)
 			break;
 
-		rc = get_next_frame(ifcr, ifcr->streams[vstreamr]->codec, iframer, packetr);
+		rc = get_next_frame(ifcr, iccr, iframer, packetr);
 		if (rc)
 			break;
 
@@ -407,14 +407,12 @@ int main(int argc, char *argv[])
 	int vid_str_num_l = -1, vid_str_num_r = -1;
 
 	for (int i = 0; i < ifcl->nb_streams; i++)
-		if (ifcl->streams[i]->codec->codec_type
-		    == AVMEDIA_TYPE_VIDEO) {
+		if (ifcl->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
 			vid_str_num_l = i;
 			break;
 		}
 	for (int i = 0; i < ifcr->nb_streams; i++)
-		if (ifcr->streams[i]->codec->codec_type
-		    == AVMEDIA_TYPE_VIDEO) {
+		if (ifcr->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
 			vid_str_num_r = i;
 			break;
 		}
@@ -422,13 +420,22 @@ int main(int argc, char *argv[])
 	if (vid_str_num_l == -1 || vid_str_num_r == -1)
 		error(EXIT_FAILURE, 0, "Didn't find a video stream");
 
-	iccl = ifcl->streams[vid_str_num_l]->codec;
-	iccr = ifcr->streams[vid_str_num_r]->codec;
-
-	icl = avcodec_find_decoder(iccl->codec_id);
-	icr = avcodec_find_decoder(iccr->codec_id);
+	// Find the decoder for the video stream
+	icl = avcodec_find_decoder(ifcl->streams[vid_str_num_l]->codecpar->codec_id);
+	icr = avcodec_find_decoder(ifcr->streams[vid_str_num_r]->codecpar->codec_id);
 	if (!icl || !icr)
 		error(EXIT_FAILURE, 0, "Unsupported codec");
+
+	// Allocate the codec context for the video stream
+	iccl = avcodec_alloc_context3(icl);
+	iccr = avcodec_alloc_context3(icr);
+	if (!iccl || !iccr)
+		error(EXIT_FAILURE, 0, "Failed to allocate codec context");
+
+	rc = avcodec_parameters_to_context(iccl, ifcl->streams[vid_str_num_l]->codecpar);
+	rc += avcodec_parameters_to_context(iccr, ifcr->streams[vid_str_num_r]->codecpar);
+	if (rc)
+		error(EXIT_FAILURE, 0, "Failed to copy codec parameters to decoder context");
 
 	if (avcodec_open2(iccl, icl, NULL) < 0
 		|| avcodec_open2(iccr, icr, NULL) < 0)
@@ -526,8 +533,8 @@ int main(int argc, char *argv[])
 				error(EXIT_FAILURE, 0,
 				      "Can't rewind right input file: %d", rc);
 		}
-		frame = process_stream(ifcl, vid_str_num_l,
-				       ifcr, vid_str_num_r,
+		frame = process_stream(ifcl, iccl, vid_str_num_l,
+				       ifcr, iccr, vid_str_num_r,
 				       dsc, offset, frames,
 				       m2mfd, outfd, chroma, &m2mtime);
 	}

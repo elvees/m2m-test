@@ -206,10 +206,10 @@ static inline bool checklimit(unsigned const value, unsigned const limit)
 	return limit == 0 || value < limit;
 }
 
-static unsigned process_stream(AVFormatContext *const ifc, int const stream,
-		struct SwsContext *dsc, unsigned const offset, unsigned const frames,
-		bool const transform, int const m2mfd, int const outfd,
-		struct timespec *const m2mtime)
+static unsigned process_stream(AVFormatContext *const ifc,
+		AVCodecContext *const icc, int const stream, struct SwsContext *dsc,
+		unsigned const offset, unsigned const frames, bool const transform,
+		int const m2mfd, int const outfd, struct timespec *const m2mtime)
 {
 	static int64_t start_pts = 0;
 	static unsigned frame = 0, skipped = 0;
@@ -235,11 +235,11 @@ static unsigned process_stream(AVFormatContext *const ifc, int const stream,
 		if (packet.stream_index != stream)
 			goto forth;
 
-		rc = avcodec_send_packet(ifc->streams[stream]->codec, &packet);
+		rc = avcodec_send_packet(icc, &packet);
 		if (rc)
 			error(EXIT_FAILURE, 0, "Failed to send packet to decoder");
 
-		while((rc = avcodec_receive_frame(ifc->streams[stream]->codec, iframe)) == 0) {
+		while((rc = avcodec_receive_frame(icc, iframe)) == 0) {
 			pr_verb("Frame is read...");
 
 			if (skipped < offset) {
@@ -394,7 +394,7 @@ int main(int argc, char *argv[]) {
 	// Find the first video stream
 	int video_stream_number = -1;
 	for (int i = 0; i < ifc->nb_streams; i++)
-		if (ifc->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+		if (ifc->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
 			video_stream_number = i;
 			break;
 		}
@@ -402,12 +402,19 @@ int main(int argc, char *argv[]) {
 	if (video_stream_number == -1)
 		error(EXIT_FAILURE, 0, "Didn't find a video stream");
 
-	// Get a pointer to the codec context for the video stream
-	icc = ifc->streams[video_stream_number]->codec;
-
 	// Find the decoder for the video stream
-	ic = avcodec_find_decoder(icc->codec_id);
-	if (!ic) error(EXIT_FAILURE, 0, "Unsupported codec");
+	ic = avcodec_find_decoder(ifc->streams[video_stream_number]->codecpar->codec_id);
+	if (!ic)
+		error(EXIT_FAILURE, 0, "Unsupported codec");
+
+	// Allocate the codec context for the video stream
+	icc = avcodec_alloc_context3(ic);
+	if (!icc)
+		error(EXIT_FAILURE, 0, "Failed to allocate codec context");
+
+	rc = avcodec_parameters_to_context(icc, ifc->streams[video_stream_number]->codecpar);
+	if (rc)
+		error(EXIT_FAILURE, 0, "Failed to copy codec parameters to decoder context");
 
 	// Open codec
 	if (avcodec_open2(icc, ic, NULL) < 0)
@@ -525,8 +532,8 @@ int main(int argc, char *argv[]) {
 				error(EXIT_FAILURE, 0, "Can not rewind input file: %d", rc);
 		}
 
-		frame = process_stream(ifc, video_stream_number, dsc, offset, frames,
-				transform, m2mfd, outfd, &m2mtime);
+		frame = process_stream(ifc, icc, video_stream_number, dsc, offset,
+				frames, transform, m2mfd, outfd, &m2mtime);
 	}
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstop);

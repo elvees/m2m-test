@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
 	// Find the first video stream
 	int video_stream_number = -1;
 	for (int i = 0; i < ifc->nb_streams; i++)
-		if (ifc->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+		if (ifc->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
 			video_stream_number = i;
 			break;
 		}
@@ -93,12 +93,19 @@ int main(int argc, char *argv[]) {
 	if (video_stream_number == -1)
 		error(EXIT_FAILURE, 0, "Didn't find a video stream");
 
-	// Get a pointer to the codec context for the video stream
-	icc = ifc->streams[video_stream_number]->codec;
-
 	// Find the decoder for the video stream
-	ic = avcodec_find_decoder(icc->codec_id);
-	if (!ic) error(EXIT_FAILURE, 0, "Unsupported codec");
+	ic = avcodec_find_decoder(ifc->streams[video_stream_number]->codecpar->codec_id);
+	if (!ic)
+		error(EXIT_FAILURE, 0, "Unsupported codec");
+
+	// Allocate the codec context for the video stream
+	icc = avcodec_alloc_context3(ic);
+	if (!icc)
+		error(EXIT_FAILURE, 0, "Failed to allocate codec context");
+
+	rc = avcodec_parameters_to_context(icc, ifc->streams[video_stream_number]->codecpar);
+	if (rc)
+		error(EXIT_FAILURE, 0, "Failed to copy codec parameters to decoder context");
 
 	// Open codec
 	if (avcodec_open2(icc, ic, NULL) < 0)
@@ -124,17 +131,27 @@ int main(int argc, char *argv[]) {
 	AVStream *os = avformat_new_stream(ofc, oc);
 	if (!os) error(EXIT_FAILURE, 0, "Can not allocate output stream");
 
-	rc = avcodec_copy_context(ofc->streams[0]->codec, icc);
-	if (rc < 0) error(EXIT_FAILURE, 0, "Can not copy codec context");
-
 	// Without setting os->time_base ffmpeg issues a warning.
 	os->time_base = ifc->streams[video_stream_number]->time_base;
 
-	occ = os->codec;
-	occ->width = icc->width;
-	occ->height = icc->height;
-	occ->pix_fmt = AV_PIX_FMT_YUV420P;
-	occ->sample_aspect_ratio = icc->sample_aspect_ratio;
+	rc = avcodec_parameters_copy(os->codecpar, ifc->streams[video_stream_number]->codecpar);
+	if (rc)
+		error(EXIT_FAILURE, 0, "Failed to copy codec parameters to output stream");
+
+	os->codecpar->codec_id = oc->id;
+	os->codecpar->format = AV_PIX_FMT_YUV420P;
+
+	occ = avcodec_alloc_context3(oc);
+	if (!occ)
+		error(EXIT_FAILURE, 0, "Failed to allocate encoder context");
+
+	rc = avcodec_parameters_to_context(occ, os->codecpar);
+	if (rc)
+		error(EXIT_FAILURE, 0, "Failed to copy codec parameters to encoder context");
+
+	// avcodec_parameters_to_context() does not set time_base, but
+	// acvodec_open2() requires it.
+	occ->time_base = os->time_base;
 
 	rc = avcodec_open2(occ, oc, NULL);
 	if (rc < 0) error(EXIT_FAILURE, 0, "Can not initialize output codec context");
