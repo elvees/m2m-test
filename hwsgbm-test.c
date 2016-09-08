@@ -217,6 +217,25 @@ int write_y4m(int outfd, const void *buf, size_t nbyte, const char *chroma)
 	return 0;
 }
 
+static int get_next_frame(AVFormatContext *const fc, AVCodecContext *const cc,
+		AVFrame *const frame, AVPacket packet)
+{
+	int rc;
+
+	while ((rc = avcodec_receive_frame(cc, frame)) != 0) {
+		if (rc != AVERROR(EAGAIN) && rc != AVERROR_EOF)
+			error(EXIT_FAILURE, 0, "Failed to read decoded frame");
+
+		rc = av_read_frame(fc, &packet);
+		if (rc == AVERROR_EOF)
+			break; /// \todo Draining
+		else if (rc != 0)
+			error(EXIT_FAILURE, 0, "Failed to read next packet: %d", rc); /// \todo Change message
+	}
+
+	return rc;
+}
+
 static unsigned process_stream(
 	AVFormatContext * const ifcl, int const vstreaml,
 	AVFormatContext * const ifcr, int const vstreamr,
@@ -239,42 +258,19 @@ static unsigned process_stream(
 		      "Can't allocate memory for input frame");
 
 	while (checklimit(frame, frames)) {
-		int frame_readl = 0, frame_readr = 0;
+		rc = get_next_frame(ifcl, ifcl->streams[vstreaml]->codec, iframel, packetl);
+		if (rc)
+			break;
 
-		while (!frame_readl) {
-			if (av_read_frame(ifcl, &packetl) == 0) {
-				if (packetl.stream_index != vstreaml) {
-					av_free_packet(&packetl);
-					continue;
-				}
-				avcodec_decode_video2(
-					ifcl->streams[vstreaml]->codec,
-					iframel, &frame_readl, &packetl);
-			} else {
-				av_free_packet(&packetl);
-				return frame;
-			}
-		}
-		while (!frame_readr) {
-			if (av_read_frame(ifcr, &packetr) == 0) {
-				if (packetr.stream_index != vstreamr) {
-					av_free_packet(&packetr);
-					continue;
-				}
-				avcodec_decode_video2(
-					ifcr->streams[vstreamr]->codec,
-					iframer, &frame_readr, &packetr);
-			} else {
-				av_free_packet(&packetr);
-				return frame;
-			}
-		}
+		rc = get_next_frame(ifcr, ifcr->streams[vstreamr]->codec, iframer, packetr);
+		if (rc)
+			break;
 
 		pr_verb("Frames are read...");
 
 		if (skipped < offset) {
 			skipped++;
-			pr_verb("Frame skipped!");
+			pr_verb("Frames are skipped!");
 			goto forth;
 		}
 
@@ -315,6 +311,7 @@ forth:
 		av_free_packet(&packetl);
 		av_free_packet(&packetr);
 	}
+
 	if (rc < 0 && rc != AVERROR_EOF)
 		error(EXIT_FAILURE, 0,
 		      "FFmpeg failed to read next packet: %d", rc);

@@ -162,15 +162,19 @@ int main(int argc, char *argv[]) {
 
 	pr_verb("Begin processing...");
 
-	while (av_read_frame(ifc, &ipacket) >= 0) {
-		// Is this a packet from the video stream
+	while (true) {
+		rc = av_read_frame(ifc, &ipacket);
+		if (rc == AVERROR_EOF)
+			break; /// \todo Draining
+		else if (rc != 0)
+			error(EXIT_FAILURE, 0, "Failed to read next packet: %d", rc);
 
 		if (ipacket.stream_index == video_stream_number) {
-			int frame_read;
+			rc = avcodec_send_packet(icc, &ipacket);
+			if (rc)
+				error(EXIT_FAILURE, 0, "Failed to send packet to decoder");
 
-			avcodec_decode_video2(icc, iframe, &frame_read, &ipacket);
-
-			if (frame_read) {
+			while ((rc = avcodec_receive_frame(icc, iframe)) == 0) {
 				pr_verb("Frame is read...");
 
 				sws_scale(osc, (uint8_t const* const*)iframe->data,
@@ -192,6 +196,9 @@ int main(int argc, char *argv[]) {
 				opacket.pts = opacket.dts = oframe->pts;
 				rc = av_write_frame(ofc, &opacket);
 			}
+
+			if (rc != 0 && rc != AVERROR(EAGAIN) && rc != AVERROR_EOF)
+				error(EXIT_FAILURE, 0, "Failed to read decoded frame");
 		}
 
 		// Free the packet that was allocated by av_read_frame

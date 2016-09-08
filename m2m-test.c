@@ -215,7 +215,7 @@ static unsigned process_stream(AVFormatContext *const ifc, int const stream,
 	static unsigned frame = 0, skipped = 0;
 
 	AVPacket packet;
-	int rc = 0, frame_read;
+	int rc = 0;
 	struct timespec start, stop, frametime;
 
 	AVFrame *iframe = av_frame_alloc();
@@ -223,65 +223,76 @@ static unsigned process_stream(AVFormatContext *const ifc, int const stream,
 	if (iframe == NULL)
 		error(EXIT_FAILURE, 0, "Can not allocate memory for input frame");
 
-	while (checklimit(frame, frames) && (rc = av_read_frame(ifc, &packet)) == 0) {
+	while (checklimit(frame, frames)) {
+		rc = av_read_frame(ifc, &packet);
+		if (rc == AVERROR_EOF)
+			break; /// \todo Draining
+		else if (rc != 0)
+			error(EXIT_FAILURE, 0, "Failed to read next packet: %d", rc);
+
 		if (!start_pts) start_pts = packet.pts;
 
 		if (packet.stream_index != stream)
 			goto forth;
 
-		avcodec_decode_video2(ifc->streams[stream]->codec, iframe, &frame_read, &packet);
-		if (!frame_read)
-			goto forth;
+		rc = avcodec_send_packet(ifc->streams[stream]->codec, &packet);
+		if (rc)
+			error(EXIT_FAILURE, 0, "Failed to send packet to decoder");
 
-		pr_verb("Frame is read...");
+		while((rc = avcodec_receive_frame(ifc->streams[stream]->codec, iframe)) == 0) {
+			pr_verb("Frame is read...");
 
-		if (skipped < offset) {
-			skipped++;
-			pr_verb("Frame skipped!");
-			goto forth;
+			if (skipped < offset) {
+				skipped++;
+				pr_verb("Frame skipped!");
+				continue;
+			}
+
+			sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
+
+			rc = clock_gettime(CLOCK_MONOTONIC, &start);
+
+			// Process frame
+			if (transform) yuv420_to_m420(out_bufs[0].frame);
+			out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
+
+			m2m_process(m2mfd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
+			rc = clock_gettime(CLOCK_MONOTONIC, &stop);
+
+			frametime = timespec_subtract(start, stop);
+			*m2mtime = timespec_add(*m2mtime, frametime);
+
+			pr_info("Frame %u (%u bytes): %u ms", frame, cap_bufs[0].v4l2.bytesused, timespec2msec(frametime));
+
+			if (outfd >= 0)
+				if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
+					error(EXIT_FAILURE, errno, "Can not write to output");
+
+			/*if (ofc) {
+				AVPacket packet = { };
+				int finished;
+
+				if (osc) sws_scale(osc, (uint8_t const* const*)cap_bufs[0].frame->data, cap_bufs[0].frame->linesize, 0, cap_bufs[0].frame->height,
+						oframe->data, oframe->linesize);
+
+				av_init_packet(&packet);
+				packet.stream_index = 0;
+
+				// \todo Use processed video
+				rc = avcodec_encode_video2(occ, &packet, oframe ?: cap_bufs[0].frame, &finished);
+				if (rc < 0) error(EXIT_FAILURE, 0, "Can not encode frame");
+
+				if (finished) {
+					rc = av_interleaved_write_frame(ofc, &packet);
+					if (rc < 0) error(EXIT_FAILURE, 0, "Can not write output packet");
+				}
+			}*/
+
+			frame += 1;
 		}
 
-		sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
-
-		rc = clock_gettime(CLOCK_MONOTONIC, &start);
-
-		// Process frame
-		if (transform) yuv420_to_m420(out_bufs[0].frame);
-		out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
-
-		m2m_process(m2mfd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
-		rc = clock_gettime(CLOCK_MONOTONIC, &stop);
-
-		frametime = timespec_subtract(start, stop);
-		*m2mtime = timespec_add(*m2mtime, frametime);
-
-		pr_info("Frame %u (%u bytes): %u ms", frame, cap_bufs[0].v4l2.bytesused, timespec2msec(frametime));
-
-		if (outfd >= 0)
-			if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
-				error(EXIT_FAILURE, errno, "Can not write to output");
-
-		/*if (ofc) {
-			AVPacket packet = { };
-			int finished;
-
-			if (osc) sws_scale(osc, (uint8_t const* const*)cap_bufs[0].frame->data, cap_bufs[0].frame->linesize, 0, cap_bufs[0].frame->height,
-					oframe->data, oframe->linesize);
-
-			av_init_packet(&packet);
-			packet.stream_index = 0;
-
-			// \todo Use processed video
-			rc = avcodec_encode_video2(occ, &packet, oframe ?: cap_bufs[0].frame, &finished);
-			if (rc < 0) error(EXIT_FAILURE, 0, "Can not encode frame");
-
-			if (finished) {
-				rc = av_interleaved_write_frame(ofc, &packet);
-				if (rc < 0) error(EXIT_FAILURE, 0, "Can not write output packet");
-			}
-		}*/
-
-		frame += 1;
+		if (rc != 0 && rc != AVERROR(EAGAIN) && rc != AVERROR_EOF)
+			error(EXIT_FAILURE, 0, "Failed to read decoded frame");
 
 forth:
 		// Free the packet that was allocated by av_read_frame
@@ -289,9 +300,6 @@ forth:
 
 		/* if (ofc) av_write_trailer(ofc); */
 	}
-
-	if (rc < 0 && rc != AVERROR_EOF)
-		error(EXIT_FAILURE, 0, "FFmpeg failed to read next packet: %d", rc);
 
 	av_frame_free(&iframe);
 
