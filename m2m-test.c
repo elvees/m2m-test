@@ -319,7 +319,7 @@ static void help(const char *program_name) {
 }
 
 int main(int argc, char *argv[]) {
-	AVFormatContext *ifc; //!< Input format context
+	AVFormatContext *ifc = NULL; //!< Input format context
 	/* AVFormatContext *ofc = NULL; //!< Output format context */
 	AVInputFormat *ifmt = NULL; //!< Input format
 	AVCodecContext *icc; //!< Input codec context
@@ -371,9 +371,6 @@ int main(int argc, char *argv[]) {
 			av_opt_find(&ifmt->priv_class, "framerate", NULL, 0, AV_OPT_SEARCH_FAKE_OBJ)) {
 		av_dict_set(&options, "framerate", framerate, 0);
 	}
-
-	ifc = avformat_alloc_context();
-	if (!ifc) error(EXIT_FAILURE, 0, "Can not allocate input format context");
 
 	// Open video file
 	if (avformat_open_input(&ifc, input, ifmt, &options) < 0)

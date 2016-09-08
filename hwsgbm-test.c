@@ -348,7 +348,7 @@ static void help(const char *program_name)
 
 int main(int argc, char *argv[])
 {
-	AVFormatContext *ifcl, *ifcr;
+	AVFormatContext *ifcl = NULL, *ifcr = NULL;
 	AVCodecContext *iccl, *iccr;
 	AVCodec *icl, *icr;
 	struct SwsContext *dsc = NULL;
@@ -397,12 +397,6 @@ int main(int argc, char *argv[])
 	if (device == NULL)
 		error(EXIT_FAILURE, 0,
 		      "You must specify device");
-
-	ifcl = avformat_alloc_context();
-	ifcr = avformat_alloc_context();
-	if (!ifcl || !ifcr)
-		error(EXIT_FAILURE, 0,
-		      "Can not allocate input format context");
 
 	if (avformat_open_input(&ifcl, inputl, NULL, NULL) < 0)
 		error(EXIT_FAILURE, 0, "Can't open left file: %s!", inputl);

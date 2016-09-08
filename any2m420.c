@@ -40,7 +40,7 @@ static void help(const char *program_name) {
 }
 
 int main(int argc, char *argv[]) {
-	AVFormatContext *ifc; //!< Input format context
+	AVFormatContext *ifc = NULL; //!< Input format context
 	AVFormatContext *ofc = NULL; //!< Output format context
 	AVCodecContext *icc; //!< Input codec context
 	AVCodecContext *occ; //!< Output codec context
@@ -70,9 +70,6 @@ int main(int argc, char *argv[]) {
 	if (output == NULL) error(EXIT_FAILURE, 0, "Output file is not specified");
 
 	char const *input = argv[optind];
-
-	ifc = avformat_alloc_context();
-	if (!ifc) error(EXIT_FAILURE, 0, "Can not allocate input format context");
 
 	// Open video file
 	if (avformat_open_input(&ifc, input, NULL, &options) < 0)
