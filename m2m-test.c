@@ -479,7 +479,8 @@ int main(int argc, char *argv[]) {
 		frame->width = icc->width;
 		frame->height = icc->height;
 
-		avpicture_fill((AVPicture *)frame, out_bufs[i].buf, frame->format, frame->width, frame->height);
+		av_image_fill_arrays(frame->data, frame->linesize, out_bufs[i].buf,
+				frame->format, frame->width, frame->height, 1);
 	}
 
 	if (output) {
