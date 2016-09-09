@@ -38,6 +38,7 @@
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <libavutil/dict.h>
+#include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
@@ -466,7 +467,7 @@ int main(int argc, char *argv[]) {
 
 	pr_verb("Allocating AVFrames for obtained buffers...");
 
-	int av_frame_size = avpicture_get_size(format, icc->width, icc->height);
+	int av_frame_size = av_image_get_buffer_size(format, icc->width, icc->height, 1);
 	if (av_frame_size != out_bufs[0].v4l2.length)
 		error(EXIT_FAILURE, 0, "FFmpeg and V4L2 buffer sizes are not equal");
 
