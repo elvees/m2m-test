@@ -295,8 +295,8 @@ static unsigned process_stream(AVFormatContext *const ifc,
 			error(EXIT_FAILURE, 0, "Failed to read decoded frame");
 
 forth:
-		// Free the packet that was allocated by av_read_frame
-		av_free_packet(&packet);
+		// Unref data that was allocated by av_read_frame()
+		av_packet_unref(&packet);
 
 		/* if (ofc) av_write_trailer(ofc); */
 	}

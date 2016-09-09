@@ -218,8 +218,8 @@ int main(int argc, char *argv[]) {
 				error(EXIT_FAILURE, 0, "Failed to read decoded frame");
 		}
 
-		// Free the packet that was allocated by av_read_frame
-		av_free_packet(&ipacket);
+		// Unref data that was allocated by av_read_frame()
+		av_packet_unref(&ipacket);
 	}
 
 	av_write_trailer(ofc);

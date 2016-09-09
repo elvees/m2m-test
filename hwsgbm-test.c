@@ -308,8 +308,8 @@ static unsigned process_stream(
 		frame += 1;
 
 forth:
-		av_free_packet(&packetl);
-		av_free_packet(&packetr);
+		av_packet_unref(&packetl);
+		av_packet_unref(&packetr);
 	}
 
 	if (rc < 0 && rc != AVERROR_EOF)
