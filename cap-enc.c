@@ -110,11 +110,11 @@ int main(int argc, char *argv[])
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420, width, height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264, width, height);
 
-	if (framerate) {
-		v4l2_framerate_configure(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, framerate);
-		v4l2_framerate_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, framerate);
-		v4l2_framerate_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, framerate);
-	}
+	struct v4l2_fract timeperframe = { 1, framerate };
+
+	v4l2_framerate_configure(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, &timeperframe);
+	v4l2_framerate_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, &timeperframe);
+	v4l2_framerate_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, &timeperframe);
 
 	pr_info("Capture framerate: %.2f FPS",
 			v4l2_framerate_get(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE));

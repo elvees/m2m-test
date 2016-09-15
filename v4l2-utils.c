@@ -290,44 +290,51 @@ void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
 
 
 void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
-		unsigned const framerate)
+		struct v4l2_fract *const timeperframe)
 {
 	int rc;
 	struct v4l2_streamparm parm = {
 		.type = type
 	};
 
-	pr_verb("V4L2: Setup framerate for %d", fd);
+	struct v4l2_fract *tpf;
+	uint32_t *cap;
+
+	switch (type) {
+		case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+			tpf = &parm.parm.capture.timeperframe;
+			cap = &parm.parm.capture.capability;
+			break;
+		case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+			tpf = &parm.parm.output.timeperframe;
+			cap = &parm.parm.output.capability;
+			break;
+		default:
+			error(EXIT_FAILURE, 0, "Unsupported V4L2 buffer type: %u", type);
+	}
+
+	pr_verb("V4L2: Setup framerate for %d %s to %.1f", fd,
+			v4l2_type_name(type),
+			(float)timeperframe->denominator / timeperframe->numerator);
+
 	rc = ioctl(fd, VIDIOC_G_PARM, &parm);
 	if (rc != 0)
 		error(EXIT_FAILURE, 0, "Can not get device streaming parameters");
 
-	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
-		if (!(parm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME)) {
-			pr_warn("Device %d capture does not support framerate adjustment");
-			return;
-		}
-
-		parm.parm.capture.timeperframe.numerator = 1;
-		parm.parm.capture.timeperframe.denominator = framerate;
-	} else if (type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
-		if (!(parm.parm.output.capability & V4L2_CAP_TIMEPERFRAME)) {
-			pr_warn("Device %d output does not support framerate adjustment");
-			return;
-		}
-
-		parm.parm.output.timeperframe.numerator = 1;
-		parm.parm.output.timeperframe.denominator = framerate;
+	if (!(*cap & V4L2_CAP_TIMEPERFRAME)) {
+		pr_warn("Device %d %s does not support framerate adjustment", fd,
+				v4l2_type_name(type));
+		return;
 	}
+
+	*tpf = *timeperframe;
 
 	rc = ioctl(fd, VIDIOC_S_PARM, &parm);
 	if (rc != 0)
 		error(EXIT_FAILURE, 0, "Can not set device streaming parameters");
 
-	if ((type == V4L2_BUF_TYPE_VIDEO_CAPTURE &&
-			parm.parm.capture.timeperframe.denominator != framerate) ||
-			(type == V4L2_BUF_TYPE_VIDEO_OUTPUT &&
-			parm.parm.output.timeperframe.denominator != framerate))
+	if (tpf->numerator != timeperframe->numerator ||
+	    tpf->denominator != timeperframe->denominator)
 		error(EXIT_FAILURE, 0,
 				"Device %d %s failed to set requested framerate", fd,
 				v4l2_type_name(type));

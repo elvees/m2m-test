@@ -27,7 +27,7 @@ void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
 	uint32_t *pixelformat, uint32_t *width,
 	uint32_t *height);
 void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
-		unsigned const framerate);
+		struct v4l2_fract *const timeperframe);
 float v4l2_framerate_get(int const fd, enum v4l2_buf_type const type);
 uint32_t v4l2_buffers_request(int const fd, enum v4l2_buf_type const type,
 		uint32_t const num, enum v4l2_memory const memory);
