@@ -125,8 +125,8 @@ int main(int argc, char *argv[]) {
 	if (ofc->oformat->flags & AVFMT_NOFILE)
 		error(EXIT_FAILURE, 0, "Unsupported output format");
 
-	oc = avcodec_find_encoder(AV_CODEC_ID_RAWVIDEO);
-	if (!oc) error(EXIT_FAILURE, 0, "Can not find rawvideo codec");
+	oc = avcodec_find_encoder(AV_CODEC_ID_WRAPPED_AVFRAME);
+	if (!oc) error(EXIT_FAILURE, 0, "Can not find wrapped avframe codec");
 
 	AVStream *os = avformat_new_stream(ofc, oc);
 	if (!os) error(EXIT_FAILURE, 0, "Can not allocate output stream");
