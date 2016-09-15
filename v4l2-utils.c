@@ -334,10 +334,11 @@ void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
 		error(EXIT_FAILURE, 0, "Can not set device streaming parameters");
 
 	if (tpf->numerator != timeperframe->numerator ||
-	    tpf->denominator != timeperframe->denominator)
-		error(EXIT_FAILURE, 0,
-				"Device %d %s failed to set requested framerate", fd,
-				v4l2_type_name(type));
+	    tpf->denominator != timeperframe->denominator) {
+		pr_warn("Device %d %s set framerate to %.1f", fd, v4l2_type_name(type),
+				(float)tpf->denominator / tpf->numerator);
+		*timeperframe = *tpf;
+	}
 }
 
 float v4l2_framerate_get(int const fd, enum v4l2_buf_type const type)
