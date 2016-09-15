@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
 
 				yuv420_to_m420(oframe);
 
-				oframe->pts = iframe->pts;
+				oframe->pts = iframe->pkt_pts;
 
 				AVPacket opacket;
 				av_init_packet(&opacket);
