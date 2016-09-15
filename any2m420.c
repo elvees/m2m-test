@@ -61,7 +61,10 @@ int main(int argc, char *argv[]) {
 		switch (opt) {
 			case 'h': help(argv[0]); return EXIT_SUCCESS;
 			case 'o': output = optarg; break;
-			case 'v': vlevel++; break;
+			case 'v':
+				vlevel++;
+				av_log_set_level(AV_LOG_ERROR + 8 * vlevel);
+				break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
 	}
