@@ -2,6 +2,12 @@
 m2m-test release history
 ========================
 
+v1.5 - 2016-10-12
+=================
+
+* Small syntax bugs in hwsgbm-test are fixed.
+* Move to FFmpeg 3.1.x. Older FFmpeg versions are not supported.
+
 v1.4 - 2016-09-15
 =================
 

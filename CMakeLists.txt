@@ -7,7 +7,7 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(FFMPEG libavformat>=57.40 libavdevice libavcodec>=57.48 libswscale libavutil)
 set(CMAKE_C_FLAGS "-std=gnu99 -Wall")
-add_definitions(-DVERSION="v1.4")
+add_definitions(-DVERSION="v1.5")
 
 if(FFMPEG_FOUND)
 	include_directories(${FFMPEG_INCLUDE_DIRS})
