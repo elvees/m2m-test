@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.6)
 project(m2m-test C)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(FFMPEG REQUIRED libavformat libavdevice libavcodec libswscale libavutil)
+pkg_check_modules(FFMPEG REQUIRED libavformat>=57.40 libavdevice libavcodec>=57.48 libswscale libavutil)
 include_directories(${FFMPEG_INCLUDE_DIRS})
 include(CheckIncludeFile)
 set(CMAKE_C_FLAGS "-std=gnu99 -Wall")
