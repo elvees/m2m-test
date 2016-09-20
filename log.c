@@ -17,10 +17,11 @@ enum loglevel vlevel = LOG_WARNING;
 void pr_level(enum loglevel const level, char const *format, ...)
 {
 	if (level <= vlevel) {
+		FILE *const stream = level < LOG_INFO ? stderr : stdout;
 		va_list va;
 		va_start(va, format);
-		vfprintf(level < LOG_INFO ? stderr : stdout, format, va);
-		putchar('\n');
+		vfprintf(stream, format, va);
+		putc('\n', stream);
 		va_end(va);
 	}
 }
@@ -28,9 +29,10 @@ void pr_level(enum loglevel const level, char const *format, ...)
 void pr_cont(enum loglevel const level, char const *format, ...)
 {
 	if (level <= vlevel) {
+		FILE *const stream = level < LOG_INFO ? stderr : stdout;
 		va_list va;
 		va_start(va, format);
-		vfprintf(level < LOG_INFO ? stderr : stdout, format, va);
+		vfprintf(stream, format, va);
 		va_end(va);
 	}
 }
