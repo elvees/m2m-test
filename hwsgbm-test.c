@@ -33,7 +33,7 @@
 #include <sys/ioctl.h>
 
 #include <linux/videodev2.h>
-#include <linux/v4l2-mem2mem-stereo.h>
+#include <linux/hwsgbm.h>
 
 #include <libavdevice/avdevice.h>
 #include <libavcodec/avcodec.h>

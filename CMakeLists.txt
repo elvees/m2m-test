@@ -17,8 +17,9 @@ target_link_libraries(any2m420 ${FFMPEG_LIBRARIES})
 
 add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)
 
-check_include_file(linux/v4l2-mem2mem-stereo.h HAVE_V4L2_STEREO)
-if(HAVE_V4L2_STEREO)
+check_include_file(linux/hwsgbm.h HAVE_HWSGBM_H)
+
+if(HAVE_HWSGBM_H)
 	add_executable(hwsgbm-test hwsgbm-test.c log.c v4l2-utils.c)
 	target_link_libraries(hwsgbm-test ${FFMPEG_LIBRARIES})
 	install(TARGETS hwsgbm-test RUNTIME DESTINATION bin)
