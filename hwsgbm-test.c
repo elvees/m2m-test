@@ -64,7 +64,6 @@ static struct m2m_buffer {
 	AVFrame *frame;
 } out_bufs[NUM_BUFS], cap_bufs[NUM_BUFS];
 
-
 static void m2m_buffers_get(int const fd)
 {
 	int rc;
@@ -218,7 +217,6 @@ int write_y4m(int outfd, const void *buf, size_t nbyte, const char *chroma)
 	return 0;
 }
 
-
 static unsigned process_stream(
 	AVFormatContext * const ifcl, int const vstreaml,
 	AVFormatContext * const ifcr, int const vstreamr,
@@ -305,7 +303,6 @@ static unsigned process_stream(
 
 		pr_info("Frame %u (%u bytes): %u ms", frame,
 			cap_bufs[0].v4l2.bytesused, timespec2msec(frametime));
-
 
 		if (outfd >= 0)
 			if (write_y4m(outfd, cap_bufs[0].buf,
@@ -401,7 +398,6 @@ int main(int argc, char *argv[])
 		error(EXIT_FAILURE, 0,
 		      "You must specify device");
 
-
 	ifcl = avformat_alloc_context();
 	ifcr = avformat_alloc_context();
 	if (!ifcl || !ifcr)
@@ -466,7 +462,6 @@ int main(int argc, char *argv[])
 	m2mfd = v4l2_open(device,
 			  V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING, 0, card);
 	pr_info("Card: %.32s", card);
-
 
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_NV21,
 			iccl->width, iccl->height);
