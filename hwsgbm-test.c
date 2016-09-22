@@ -468,7 +468,7 @@ int main(int argc, char *argv[])
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_GREY,
 			0, 0);
 	v4l2_getformat(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, NULL,
-		       &rwidth, &rheight)
+		       &rwidth, &rheight);
 
 	m2m_buffers_get(m2mfd);
 	chroma = malloc(rwidth * rheight / 2);
@@ -507,7 +507,7 @@ int main(int argc, char *argv[])
 			error(EXIT_FAILURE, errno, "Can not open output file");
 		ret = dprintf(outfd,
 				"YUV4MPEG2 W%d H%d F25:1 A0:0 C420 XYSCS=420\n",
-				rwidth, rheight)
+				rwidth, rheight);
 		if (ret < 0)
 			error(EXIT_FAILURE, errno,
 				"Can't write to output file");
