@@ -1,0 +1,27 @@
+========================
+m2m-test release history
+========================
+
+v1.4 - 2016-09-15
+=================
+
+* cap-enc: Use 1 second timeout waiting for input frame in cap-enc
+* cap-enc: Configure encoder to the framerate returned by input device
+* Add hwsgbm-test
+
+v1.3 - 2016-01-13
+=================
+
+* m2m-test: Add ability to output to file descriptor
+* m2m-test: Add ability to loop over input file
+* Add cap-enc tool to pipe video from VINC through VPU
+
+v1.2 - 2015-12-09
+=================
+
+* Print FPS at the end of encoding
+
+v1.1 - 2015-09-01
+=================
+
+* First release
