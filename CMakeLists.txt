@@ -30,5 +30,6 @@ if(FFMPEG_FOUND)
 endif()
 
 add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)
+add_executable(v4l2mmapbench v4l2mmapbench.c v4l2-utils.c)
 
-install(TARGETS cap-enc RUNTIME DESTINATION bin)
+install(TARGETS cap-enc v4l2mmapbench RUNTIME DESTINATION bin)
