@@ -29,7 +29,19 @@ if(FFMPEG_FOUND)
 	endif()
 endif()
 
-add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)
-add_executable(v4l2mmapbench v4l2mmapbench.c v4l2-utils.c)
+check_include_file(linux/dmabuf_exporter.h HAVE_DMABUF_EXPORTER_H)
+if(HAVE_DMABUF_EXPORTER_H)
+	add_definitions(-DDMABUFEXP)
+endif()
 
-install(TARGETS cap-enc v4l2mmapbench RUNTIME DESTINATION bin)
+pkg_check_modules(LIBDRM libdrm libkms)
+if(LIBDRM_FOUND)
+	include_directories(${LIBDRM_INCLUDE_DIRS})
+	add_definitions(-DLIBDRM)
+endif()
+
+add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)
+add_executable(devbufbench log.c devbufbench.c v4l2-utils.c)
+target_link_libraries(devbufbench ${LIBDRM_LIBRARIES})
+
+install(TARGETS cap-enc devbufbench RUNTIME DESTINATION bin)
