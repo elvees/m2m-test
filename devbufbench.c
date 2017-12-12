@@ -46,6 +46,12 @@
 #define VERSION "unversioned"
 #endif
 
+static void timespec_gettime(struct timespec *ts) {
+	int rc = clock_gettime(CLOCK_MONOTONIC, ts);
+	if (rc < 0)
+		error(EXIT_FAILURE, errno, "Failed to get time");
+}
+
 static inline struct timespec timespec_subtract(struct timespec const start,
 		struct timespec const stop) {
 	struct timespec res = {
@@ -274,7 +280,7 @@ static void help(const char *program_name) {
 }
 
 int main(int argc, char *argv[]) {
-	int opt, rc, fd;
+	int opt, fd;
 	struct timespec start, stop, time;
 
 	uint32_t *mallocbuf, *devbuf;
@@ -346,18 +352,13 @@ int main(int argc, char *argv[]) {
 		if (!tests[t].condition)
 			continue;
 
-		rc = clock_gettime(CLOCK_MONOTONIC, &start);
-		if (rc < 0)
-			error(EXIT_FAILURE, errno, "Failed to get time");
+		timespec_gettime(&start);
 
 		for (unsigned i = 0; i < num; ++i) {
 			tests[t].func(tests[t].buf, size);
 		}
 
-		rc = clock_gettime(CLOCK_MONOTONIC, &stop);
-		if (rc < 0)
-			error(EXIT_FAILURE, errno, "Failed to get time");
-
+		timespec_gettime(&stop);
 		time = timespec_subtract(start, stop);
 
 		printf("%s: %.1f s\n", tests[t].message, timespec2float(time));
