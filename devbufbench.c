@@ -177,7 +177,19 @@ static void *v4l2_alloc(const int fd, size_t *const size) {
 	return buf;
 }
 
+static void v4l2_free(void *const ptr, size_t const size) {
+	if (munmap(ptr, size))
+		error(EXIT_FAILURE, errno, "Failed to munmap() buffer");
+}
+
+static void simple_close(const int fd) {
+	if (close(fd))
+		error(EXIT_FAILURE, errno, "Failed to close device descriptor");
+}
+
 #ifdef DMABUFEXP
+static int buffd;
+
 static int simple_open(const char *const device) {
 	const int fd = open(device, O_RDWR);
 
@@ -192,7 +204,7 @@ static void *dmabufexp_alloc(const int fd, size_t *const size) {
 	if (rc < 0)
 		error(EXIT_FAILURE, rc, "Failed to create buffer");
 
-	int buffd = ioctl(fd, DMABUF_IOCTL_EXPORT, O_RDWR);
+	buffd = ioctl(fd, DMABUF_IOCTL_EXPORT, O_RDWR);
 	if (buffd < 0)
 		error(EXIT_FAILURE, buffd, "Failed to export buffer");
 
@@ -203,9 +215,20 @@ static void *dmabufexp_alloc(const int fd, size_t *const size) {
 
 	return buf;
 }
+
+static void dmabufexp_free(void *const ptr, size_t const size) {
+	if (munmap(ptr, size))
+		error(EXIT_FAILURE, errno, "Failed to munmap() buffer");
+
+	if (close(buffd))
+		error(EXIT_FAILURE, errno, "Failed to close buffer file descriptor");
+}
 #endif
 
 #ifdef LIBDRM
+static struct kms_driver *kms;
+static struct kms_bo *bo;
+
 static int drm_open(const char *const device) {
 	static const char *const drivers[] = {
 		"pdp-drm", "i915", "radeon", "nouveau", "vmwgfx", "exynos", "amdgpu",
@@ -215,8 +238,13 @@ static int drm_open(const char *const device) {
 
 	for (int i = 0; i < ARRAY_SIZE(drivers); i++) {
 		int fd = drmOpen(drivers[i], NULL);
-		if (fd >= 0)
+		if (fd >= 0) {
+			int rc = kms_create(fd, &kms);
+			if (rc)
+				error(EXIT_FAILURE, rc, "Failed to create KMS driver");
+
 			return fd;
+		}
 	}
 
 	error(EXIT_FAILURE, 0, "Failed to open DRM device");
@@ -224,13 +252,8 @@ static int drm_open(const char *const device) {
 }
 
 static void *drm_alloc(const int fd, size_t *const size) {
-	struct kms_driver *kms;
-	struct kms_bo *bo;
 	void *buf;
-
-	int rc = kms_create(fd, &kms);
-	if (rc < 0)
-		error(EXIT_FAILURE, rc, "Failed to create KMS driver");
+	int rc;
 
 	unsigned attrs[] = { KMS_WIDTH, 1024, KMS_HEIGHT, *size / 4096, KMS_TERMINATE_PROP_LIST };
 	*size = attrs[1] * attrs[3] * 4;
@@ -245,20 +268,45 @@ static void *drm_alloc(const int fd, size_t *const size) {
 
 	return buf;
 }
+
+static void drm_free(void *const ptr, size_t const size) {
+	int rc;
+
+	rc = kms_bo_unmap(bo);
+	if (rc)
+		error(EXIT_FAILURE, rc, "Failed to unmap binary object");
+
+	rc = kms_bo_destroy(&bo);
+	if (rc)
+		error(EXIT_FAILURE, rc, "Failed to destroy binary object");
+}
+
+static void drm_close(const int fd) {
+	int rc;
+
+	rc = kms_destroy(&kms);
+	if (rc)
+		error(EXIT_FAILURE, rc, "Failed to destroy KMS driver");
+
+	if (drmClose(fd))
+		error(EXIT_FAILURE, errno, "Failed to close DRM device");
+}
 #endif
 
 const struct backend {
 	char *name;
 	int (*device_open)(const char *const device);
 	void *(*buffer_alloc)(const int fd, size_t *const size);
+	void (*buffer_free)(void *const ptr, size_t const size);
+	void (*device_close)(int fd);
 	void *priv;
 } backends[] = {
-	{ "v4l2", v4l2_open2, v4l2_alloc },
+	{ "v4l2", v4l2_open2, v4l2_alloc, v4l2_free, simple_close },
 #ifdef DMABUFEXP
-	{ "dmabufexp", simple_open, dmabufexp_alloc },
+	{ "dmabufexp", simple_open, dmabufexp_alloc, dmabufexp_free, simple_close },
 #endif
 #ifdef LIBDRM
-	{ "drm", drm_open, drm_alloc }
+	{ "drm", drm_open, drm_alloc, drm_free, drm_close }
 #endif
 };
 
@@ -364,8 +412,8 @@ int main(int argc, char *argv[]) {
 		printf("%s: %.1f s\n", tests[t].message, timespec2float(time));
 	}
 
-	/// \todo Add cleanup
-	// Without proper cleanup drivers may not clean allocated resources.
+	backend->buffer_free(devbuf, size);
+	backend->device_close(fd);
 
 	return EXIT_SUCCESS;
 }
