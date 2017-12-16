@@ -71,6 +71,8 @@ static inline float timespec2float(struct timespec const t) {
 	return t.tv_sec + (float)t.tv_nsec / 1e9;
 }
 
+uint64_t res;
+
 __attribute__((noinline))
 static void sum(void *ptr, size_t size) {
 	const uint8_t *const a = ptr;
@@ -79,7 +81,9 @@ static void sum(void *ptr, size_t size) {
 	for (size_t i = 0; i < size; ++i)
 		sum += a[i];
 
-	*(uint64_t *)ptr = sum;
+	/* This assignment is required to prevent compiler from optimizing out
+	 * the whole function. */
+	res = sum;
 }
 
 __attribute__((noinline))
