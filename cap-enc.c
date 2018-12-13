@@ -49,6 +49,7 @@ static void help(const char *program_name)
 	puts("    -o arg    Output file name");
 	puts("    -r arg    Specify desired framerate");
 	puts("    -s arg    Set video size [defaults to 1280x720]");
+	puts("    -q arg    Set quantization parameter");
 	puts("    -v        Be more verbose. Can be specified multiple times");
 }
 
@@ -65,8 +66,9 @@ int main(int argc, char *argv[])
 	unsigned framerate = 0;
 	char const *output = NULL;
 	int outfd = -1;
+	int qp = -1;
 
-	while ((opt = getopt(argc, argv, "f:hn:o:r:s:v")) != -1) {
+	while ((opt = getopt(argc, argv, "f:hn:o:r:s:q:v")) != -1) {
 		switch (opt) {
 			case 'f': outfd = atoi(optarg); break;
 			case 'h': help(argv[0]); return EXIT_SUCCESS;
@@ -86,6 +88,7 @@ int main(int argc, char *argv[])
 
 				break;
 			}
+			case 'q': qp = atoi(optarg); break;
 			case 'v': vlevel++; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
@@ -109,6 +112,18 @@ int main(int argc, char *argv[])
 	v4l2_configure(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_M420, width, height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420, width, height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264, width, height);
+
+	if (qp >= 0) {
+		struct v4l2_ext_control ctrl = {
+				.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP,
+				.value = qp
+		};
+
+		v4l2_s_ext_ctrls(m2mfd, V4L2_CTRL_CLASS_MPEG, 1, &ctrl);
+
+		if (qp != ctrl.value)
+			pr_warn("QP from VPU: %d", ctrl.value);
+	}
 
 	struct v4l2_fract timeperframe = { 1, framerate };
 

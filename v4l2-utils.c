@@ -479,3 +479,38 @@ void v4l2_streamon(int const fd, enum v4l2_buf_type const type)
 		error(EXIT_FAILURE, errno, "Failed to start %s stream",
 				v4l2_type_name(type));
 }
+
+void v4l2_g_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
+		      struct v4l2_ext_control *const controls)
+{
+	int rc;
+	struct v4l2_ext_controls ctrls = {
+		.ctrl_class = which,
+		.count = count,
+		.controls = controls
+	};
+
+	rc = ioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls);
+	if (rc != 0)
+		error(EXIT_FAILURE, errno, "Error getting controls");
+}
+
+void v4l2_s_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
+		      struct v4l2_ext_control *const controls)
+{
+	int rc;
+	struct v4l2_ext_controls ctrls = {
+		.ctrl_class = which,
+		.count = count,
+		.controls = controls
+	};
+
+	rc = ioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls);
+	if (rc != 0) {
+		if (ctrls.error_idx >= ctrls.count || count == 0)
+			error(EXIT_FAILURE, errno, "Error setting controls");
+		else
+			error(EXIT_FAILURE, errno, "Error setting control %u",
+			      controls[ctrls.error_idx].id);
+	}
+}

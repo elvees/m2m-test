@@ -38,5 +38,9 @@ void v4l2_buffers_export(int const fd, enum v4l2_buf_type const type,
 void v4l2_dqbuf(int const fd, struct v4l2_buffer *const restrict buf);
 void v4l2_qbuf(int const fd, struct v4l2_buffer *const restrict buf);
 void v4l2_streamon(int const fd, enum v4l2_buf_type const type);
+void v4l2_g_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
+		      struct v4l2_ext_control *const controls);
+void v4l2_s_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
+		      struct v4l2_ext_control *const controls);
 
 #endif /* V4L2_H */
