@@ -30,6 +30,7 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/poll.h>
 
 #include <linux/videodev2.h>
 
@@ -127,6 +128,7 @@ static void m2m_buffers_get(int const fd) {
 		vbuf->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 		vbuf->memory = V4L2_MEMORY_MMAP;
 		vbuf->index = i;
+		vbuf->flags = 0;
 
 		rc = ioctl(fd, VIDIOC_QUERYBUF, vbuf);
 		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query output buffer");
@@ -141,6 +143,7 @@ static void m2m_buffers_get(int const fd) {
 		vbuf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		vbuf->memory = V4L2_MEMORY_MMAP;
 		vbuf->index = i;
+		vbuf->flags = 0;
 
 		rc = ioctl(fd, VIDIOC_QUERYBUF, vbuf);
 		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query capture buffer");
@@ -149,15 +152,101 @@ static void m2m_buffers_get(int const fd) {
 		cap_bufs[i].buf = mmap(NULL, vbuf->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, vbuf->m.offset);
 		if (cap_bufs[i].buf == MAP_FAILED) error(EXIT_FAILURE, errno, "Can not mmap capture buffer");
 	}
+
+	for (int i = 0; i < NUM_BUFS; i++) {
+		struct v4l2_buffer buf = {
+			.index = i,
+			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			.memory = V4L2_MEMORY_MMAP
+		};
+
+		v4l2_qbuf(fd, &buf);
+	}
 }
 
-static void m2m_process(int const fd, struct v4l2_buffer const *const out, struct v4l2_buffer const *const cap) {
-	pr_verb("M2M: Processing...");
-	ioctl(fd, VIDIOC_QBUF, out);
-	ioctl(fd, VIDIOC_QBUF, cap);
+static void queue_outbuf(int const fd, struct SwsContext *dsc, AVFrame * const iframe,
+		bool const transform, int const index)
+{
+	sws_scale(dsc, (uint8_t const * const*)iframe->data,
+			iframe->linesize, 0, iframe->height,
+			out_bufs[index].frame->data,
+			out_bufs[index].frame->linesize);
+	/* Process frame */
+	if (transform)
+		yuv420_to_m420(out_bufs[index].frame);
 
-	ioctl(fd, VIDIOC_DQBUF, cap);
-	ioctl(fd, VIDIOC_DQBUF, out);
+	out_bufs[index].v4l2.bytesused = out_bufs[index].frame->width *
+			out_bufs[index].frame->height * 3 / 2;
+	out_bufs[index].v4l2.flags = 0;
+	v4l2_qbuf(fd, &out_bufs[index].v4l2);
+}
+
+static void dequeue_outbuf(int const fd, int const index)
+{
+	v4l2_dqbuf(fd, &out_bufs[index].v4l2);
+	if (index != out_bufs[index].v4l2.index)
+		error(EXIT_FAILURE, 0, "Error index of buffer.");
+}
+
+static unsigned process_capbuf(int const fd, int const outfd)
+{
+	int rc = 0;
+	struct v4l2_buffer buf = {
+		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		.memory = V4L2_MEMORY_MMAP
+	};
+	unsigned bytesused = 0;
+
+	v4l2_dqbuf(fd, &buf);
+	bytesused = buf.bytesused;
+	if (outfd >= 0) {
+		rc = write(outfd, cap_bufs[buf.index].buf, buf.bytesused);
+		if (rc < 0)
+			error(EXIT_FAILURE, errno, "Can not write to output");
+	}
+
+	buf.flags = 0;
+	buf.bytesused = 0;
+	v4l2_qbuf(fd, &buf);
+
+	return bytesused;
+}
+
+static void m2m_process(int const fd, int const outfd, struct SwsContext *dsc,
+		AVFrame * const iframe, bool const transform, unsigned const frame,
+		unsigned *const encframe)
+{
+	int rc = 0;
+	unsigned i = frame % NUM_BUFS;
+	unsigned bytesused = 0;
+
+	if (!(out_bufs[i].v4l2.flags & V4L2_BUF_FLAG_QUEUED)) {
+		queue_outbuf(fd, dsc, iframe, transform, i);
+	} else {
+		struct pollfd fds[1] = {
+			{ fd, POLLOUT | POLLIN }
+		};
+
+		while (1) {
+			rc = poll(fds, 1, 1000);
+			if (rc < 0)
+				error(EXIT_FAILURE, errno, "Poll error");
+			if (rc == 0)
+				error(EXIT_FAILURE, 0, "Timeout waiting for data...");
+
+			if (fds[0].revents & POLLIN) {
+				bytesused = process_capbuf(fd, outfd);
+				pr_verb("Compressed frame %u (%u bytes)", *encframe, bytesused);
+				*encframe += 1;
+			}
+
+			if (fds[0].revents & POLLOUT) {
+				dequeue_outbuf(fd, i);
+				queue_outbuf(fd, dsc, iframe, transform, i);
+				break;
+			}
+		}
+	}
 }
 
 static inline struct timespec timespec_subtract(struct timespec const start,
@@ -207,17 +296,23 @@ static inline bool checklimit(unsigned const value, unsigned const limit)
 	return limit == 0 || value < limit;
 }
 
+/*
+ * Limitations: The next parts work synchronously and can influence
+ * each other and overall test performance:
+ * - functions of FFmpeg
+ * - yuv420_to_m420()
+ * - writing of processed (V4L2_BUF_TYPE_VIDEO_CAPTURE) frame
+ */
 static unsigned process_stream(AVFormatContext *const ifc,
 		AVCodecContext *const icc, int const stream, struct SwsContext *dsc,
 		unsigned const offset, unsigned const frames, bool const transform,
-		int const m2mfd, int const outfd, struct timespec *const m2mtime)
+		int const m2mfd, int const outfd, unsigned *const encframe)
 {
 	static int64_t start_pts = 0;
 	static unsigned frame = 0, skipped = 0;
 
 	AVPacket packet;
 	int rc = 0;
-	struct timespec start, stop, frametime;
 
 	AVFrame *iframe = av_frame_alloc();
 
@@ -249,25 +344,7 @@ static unsigned process_stream(AVFormatContext *const ifc,
 				continue;
 			}
 
-			sws_scale(dsc, (uint8_t const* const*)iframe->data, iframe->linesize, 0, iframe->height, out_bufs[0].frame->data, out_bufs[0].frame->linesize);
-
-			rc = clock_gettime(CLOCK_MONOTONIC, &start);
-
-			// Process frame
-			if (transform) yuv420_to_m420(out_bufs[0].frame);
-			out_bufs[0].v4l2.bytesused = out_bufs[0].frame->width * out_bufs[0].frame->height * 3 / 2;
-
-			m2m_process(m2mfd, &out_bufs[0].v4l2, &cap_bufs[0].v4l2);
-			rc = clock_gettime(CLOCK_MONOTONIC, &stop);
-
-			frametime = timespec_subtract(start, stop);
-			*m2mtime = timespec_add(*m2mtime, frametime);
-
-			pr_info("Frame %u (%u bytes): %u ms", frame, cap_bufs[0].v4l2.bytesused, timespec2msec(frametime));
-
-			if (outfd >= 0)
-				if (write(outfd, cap_bufs[0].buf, cap_bufs[0].v4l2.bytesused) < 0)
-					error(EXIT_FAILURE, errno, "Can not write to output");
+			m2m_process(m2mfd, outfd, dsc, iframe, transform, frame, encframe);
 
 			/*if (ofc) {
 				AVPacket packet = { };
@@ -307,6 +384,18 @@ forth:
 	return frame;
 }
 
+static void m2m_drain(int const fd, int const outfd, unsigned encframe, unsigned const frames)
+{
+	int rc = 0;
+	unsigned bytesused = 0;
+
+	while (checklimit(encframe, frames)) {
+		bytesused = process_capbuf(fd, outfd);
+		pr_verb("Compressed frame %u (%u bytes)", encframe, bytesused);
+		encframe += 1;
+	}
+}
+
 #ifndef VERSION
 #define VERSION "unversioned"
 #endif
@@ -342,7 +431,7 @@ int main(int argc, char *argv[]) {
 	struct SwsContext *osc = NULL; //!< Output swscale context
 	AVFrame *oframe = NULL; //!< Output frame
 
-	struct timespec loopstart, loopstop, looptime, m2mtime = { 0 };
+	struct timespec loopstart, loopstop, looptime = { 0 };
 	int rc, opt;
 	int m2mfd, outfd = -1;
 
@@ -534,7 +623,7 @@ int main(int argc, char *argv[]) {
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not write header for output file");
 	} */
 
-	unsigned int frame = 0;
+	unsigned int frame = 0, encframe = 0;
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstart);
 	pr_verb("Begin processing...");
@@ -550,14 +639,13 @@ int main(int argc, char *argv[]) {
 		}
 
 		frame = process_stream(ifc, icc, video_stream_number, dsc, offset,
-				frames, transform, m2mfd, outfd, &m2mtime);
+				frames, transform, m2mfd, outfd, &encframe);
 	}
+
+	m2m_drain(m2mfd, outfd, encframe, frame);
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstop);
 	looptime = timespec_subtract(loopstart, loopstop);
-
-	pr_info("Total time in M2M: %.1f s (%.1f FPS)",
-			timespec2float(m2mtime), frame / timespec2float(m2mtime));
 
 	pr_info("Total time in main loop: %.1f s (%.1f FPS)",
 			timespec2float(looptime), frame / timespec2float(looptime));
