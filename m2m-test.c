@@ -324,6 +324,7 @@ static void help(const char *program_name) {
 	puts("    -r arg    When grabbing from camera specify desired framerate");
 	puts("    -s arg    From which frame processing should be started");
 	puts("    -t        Transform video to M420 [Avico-specific]");
+	puts("    -q arg    Set quantization parameter");
 	puts("    -v        Be more verbose. Can be specified multiple times");
 }
 
@@ -348,13 +349,14 @@ int main(int argc, char *argv[]) {
 	unsigned offset = 0, frames = 0, loops = 1;
 	char *framerate = NULL;
 	bool transform = false;
+	int qp = -1;
 
 	char const *output = NULL, *device = NULL;
 	char const *opfn = NULL; //!< Output pixel format name
 
 	av_register_all();
 
-	while ((opt = getopt(argc, argv, "d:f:hl:n:o:p:r:s:tv")) != -1) {
+	while ((opt = getopt(argc, argv, "d:f:hl:n:o:p:r:s:tq:v")) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
 			case 'f': outfd = atoi(optarg); break;
@@ -366,6 +368,7 @@ int main(int argc, char *argv[]) {
 			case 'r': framerate = optarg; break;
 			case 's': offset = atoi(optarg); break;
 			case 't': transform = true; break;
+			case 'q': qp = atoi(optarg); break;
 			case 'v': vlevel++; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
@@ -459,6 +462,18 @@ int main(int argc, char *argv[]) {
 			icc->width, icc->height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264,
 			icc->width, icc->height);
+
+	if (qp >= 0) {
+		struct v4l2_ext_control ctrl = {
+			.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP,
+			.value = qp
+		};
+
+		v4l2_s_ext_ctrls(m2mfd, V4L2_CTRL_CLASS_MPEG, 1, &ctrl);
+
+		if (qp != ctrl.value)
+			pr_warn("QP from VPU: %d", ctrl.value);
+	}
 
 	m2m_buffers_get(m2mfd);
 
