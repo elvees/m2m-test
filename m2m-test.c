@@ -214,7 +214,7 @@ static unsigned process_capbuf(int const fd, int const outfd)
 
 static void m2m_process(int const fd, int const outfd, struct SwsContext *dsc,
 		AVFrame * const iframe, bool const transform, unsigned const frame,
-		unsigned *const encframe)
+		unsigned *const encframe, uint64_t *const outsize)
 {
 	int rc = 0;
 	unsigned i = frame % NUM_BUFS;
@@ -236,6 +236,7 @@ static void m2m_process(int const fd, int const outfd, struct SwsContext *dsc,
 
 			if (fds[0].revents & POLLIN) {
 				bytesused = process_capbuf(fd, outfd);
+				*outsize += bytesused;
 				pr_verb("Compressed frame %u (%u bytes)", *encframe, bytesused);
 				*encframe += 1;
 			}
@@ -306,7 +307,8 @@ static inline bool checklimit(unsigned const value, unsigned const limit)
 static unsigned process_stream(AVFormatContext *const ifc,
 		AVCodecContext *const icc, int const stream, struct SwsContext *dsc,
 		unsigned const offset, unsigned const frames, bool const transform,
-		int const m2mfd, int const outfd, unsigned *const encframe)
+		int const m2mfd, int const outfd, unsigned *const encframe,
+		uint64_t *const outsize)
 {
 	static int64_t start_pts = 0;
 	static unsigned frame = 0, skipped = 0;
@@ -344,7 +346,7 @@ static unsigned process_stream(AVFormatContext *const ifc,
 				continue;
 			}
 
-			m2m_process(m2mfd, outfd, dsc, iframe, transform, frame, encframe);
+			m2m_process(m2mfd, outfd, dsc, iframe, transform, frame, encframe, outsize);
 
 			/*if (ofc) {
 				AVPacket packet = { };
@@ -384,13 +386,16 @@ forth:
 	return frame;
 }
 
-static void m2m_drain(int const fd, int const outfd, unsigned encframe, unsigned const frames)
+
+static void m2m_drain(int const fd, int const outfd, unsigned encframe, unsigned const frames,
+		uint64_t *const outsize)
 {
 	int rc = 0;
 	unsigned bytesused = 0;
 
 	while (checklimit(encframe, frames)) {
 		bytesused = process_capbuf(fd, outfd);
+		*outsize += bytesused;
 		pr_verb("Compressed frame %u (%u bytes)", encframe, bytesused);
 		encframe += 1;
 	}
@@ -431,6 +436,7 @@ int main(int argc, char *argv[]) {
 	struct SwsContext *osc = NULL; //!< Output swscale context
 	AVFrame *oframe = NULL; //!< Output frame
 
+	uint64_t outsize = 0;
 	struct timespec loopstart, loopstop, looptime = { 0 };
 	int rc, opt;
 	int m2mfd, outfd = -1;
@@ -639,10 +645,13 @@ int main(int argc, char *argv[]) {
 		}
 
 		frame = process_stream(ifc, icc, video_stream_number, dsc, offset,
-				frames, transform, m2mfd, outfd, &encframe);
+				frames, transform, m2mfd, outfd, &encframe, &outsize);
 	}
 
-	m2m_drain(m2mfd, outfd, encframe, frame);
+	m2m_drain(m2mfd, outfd, encframe, frame, &outsize);
+
+	outsize /= 1024;
+	pr_info("Output size: %" PRIu64 " KiB", outsize);
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &loopstop);
 	looptime = timespec_subtract(loopstart, loopstop);
