@@ -13,6 +13,7 @@ if(FFMPEG_FOUND)
 	include_directories(${FFMPEG_INCLUDE_DIRS})
 
 	add_executable(m2m-test m2m-test.c log.c v4l2-utils.c m420.c)
+	target_compile_definitions(m2m-test PRIVATE -D_FILE_OFFSET_BITS=64)
 	target_link_libraries(m2m-test ${FFMPEG_LIBRARIES})
 
 	add_executable(any2m420 any2m420.c log.c m420.c)
@@ -33,6 +34,7 @@ if(LIBDRM_FOUND)
 endif()
 
 add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)
+target_compile_definitions(cap-enc PRIVATE -D_FILE_OFFSET_BITS=64)
 add_executable(devbufbench log.c devbufbench.c v4l2-utils.c)
 target_link_libraries(devbufbench ${LIBDRM_LIBRARIES})
 
