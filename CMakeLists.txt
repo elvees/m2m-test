@@ -19,14 +19,6 @@ if(FFMPEG_FOUND)
 	target_link_libraries(any2m420 ${FFMPEG_LIBRARIES})
 
 	install(TARGETS m2m-test any2m420 RUNTIME DESTINATION bin)
-
-	check_include_file(linux/hwsgbm.h HAVE_HWSGBM_H)
-
-	if(HAVE_HWSGBM_H)
-		add_executable(hwsgbm-test hwsgbm-test.c log.c v4l2-utils.c)
-		target_link_libraries(hwsgbm-test ${FFMPEG_LIBRARIES})
-		install(TARGETS hwsgbm-test RUNTIME DESTINATION bin)
-	endif()
 endif()
 
 check_include_file(linux/dmabuf_exporter.h HAVE_DMABUF_EXPORTER_H)
