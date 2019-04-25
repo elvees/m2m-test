@@ -48,6 +48,8 @@
 #include "log.h"
 #include "v4l2-utils.h"
 
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 #define V4L2_CID_TRANS_TIME_MSEC (V4L2_CID_PRIVATE_BASE)
 #define V4L2_CID_TRANS_NUM_BUFS  (V4L2_CID_PRIVATE_BASE + 1)
 
@@ -57,6 +59,26 @@
 #define MSEC_IN_SEC 1000
 #define USEC_IN_SEC 1000000
 #define NSEC_IN_SEC 1000000000
+
+static struct ctrl avico_mpeg_ctrls[] = {
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_P_FRAME_QP
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_CHROMA_QP_INDEX_OFFSET
+	},
+};
+
+static struct class_ctrls avico_ctrls[] = {
+	{
+		.which = V4L2_CTRL_CLASS_MPEG,
+		.ctrls = avico_mpeg_ctrls,
+		.cnt = ARRAY_SIZE(avico_mpeg_ctrls)
+	}
+};
 
 static struct m2m_buffer {
 	struct v4l2_buffer v4l2;
@@ -390,7 +412,6 @@ forth:
 static void m2m_drain(int const fd, int const outfd, unsigned encframe, unsigned const frames,
 		uint64_t *const outsize)
 {
-	int rc = 0;
 	unsigned bytesused = 0;
 
 	while (checklimit(encframe, frames)) {
@@ -418,7 +439,7 @@ static void help(const char *program_name) {
 	puts("    -r arg    When grabbing from camera specify desired framerate");
 	puts("    -s arg    From which frame processing should be started");
 	puts("    -t        Transform video to M420 [Avico-specific]");
-	puts("    -q arg    Set quantization parameter");
+	puts("    -c <ctrl>=<val>    Set the value of the controls [VIDIOC_S_EXT_CTRLS]");
 	puts("    -v        Be more verbose. Can be specified multiple times");
 }
 
@@ -444,14 +465,15 @@ int main(int argc, char *argv[]) {
 	unsigned offset = 0, frames = 0, loops = 1;
 	char *framerate = NULL;
 	bool transform = false;
-	int qp = -1;
 
 	char const *output = NULL, *device = NULL;
 	char const *opfn = NULL; //!< Output pixel format name
 
 	av_register_all();
 
-	while ((opt = getopt(argc, argv, "d:f:hl:n:o:p:r:s:tq:v")) != -1) {
+	const char *optstring = "d:f:hl:n:o:p:r:s:tc:v";
+
+	while ((opt = getopt(argc, argv, optstring)) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
 			case 'f': outfd = atoi(optarg); break;
@@ -463,7 +485,7 @@ int main(int argc, char *argv[]) {
 			case 'r': framerate = optarg; break;
 			case 's': offset = atoi(optarg); break;
 			case 't': transform = true; break;
-			case 'q': qp = atoi(optarg); break;
+			case 'c': /* skip now, parse later */; break;
 			case 'v': vlevel++; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
@@ -471,6 +493,25 @@ int main(int argc, char *argv[]) {
 
 	if (argc < optind + 1) error(EXIT_FAILURE, 0, "Not enough arguments");
 	if (device == NULL) error(EXIT_FAILURE, 0, "You must specify device");
+
+	char card[32];
+
+	m2mfd = v4l2_open(device, V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING, 0, card);
+	pr_info("Card: %.32s", card);
+
+	if (strncmp(card, "vim2m", 32) == 0) {
+		m2m_vim2m_controls(m2mfd);
+	}
+
+	find_controls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls));
+	optind = 0;
+	while ((opt = getopt(argc, argv, optstring)) != -1) {
+		switch (opt) {
+			case 'c':
+				parse_ctrl_opts(optarg, avico_ctrls, ARRAY_SIZE(avico_ctrls));
+				break;
+		}
+	}
 
 	char const *input = argv[optind];
 
@@ -544,31 +585,12 @@ int main(int argc, char *argv[]) {
 		if (rc < 0) error(EXIT_FAILURE, 0, "Can not allocate output frame buffers");
 	}
 
-	char card[32];
-
-	m2mfd = v4l2_open(device, V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING, 0, card);
-	pr_info("Card: %.32s", card);
-
-	if (strncmp(card, "vim2m", 32) == 0) {
-		m2m_vim2m_controls(m2mfd);
-	}
-
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420,
 			icc->width, icc->height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264,
 			icc->width, icc->height);
 
-	if (qp >= 0) {
-		struct v4l2_ext_control ctrl = {
-			.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP,
-			.value = qp
-		};
-
-		v4l2_s_ext_ctrls(m2mfd, V4L2_CTRL_CLASS_MPEG, 1, &ctrl);
-
-		if (qp != ctrl.value)
-			pr_warn("QP from VPU: %d", ctrl.value);
-	}
+	g_s_ctrls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls), true);
 
 	m2m_buffers_get(m2mfd);
 

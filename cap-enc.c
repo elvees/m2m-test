@@ -28,7 +28,29 @@
 #include "log.h"
 #include "v4l2-utils.h"
 
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 #define NUM_BUFS 4
+
+static struct ctrl avico_mpeg_ctrls[] = {
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_P_FRAME_QP
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_CHROMA_QP_INDEX_OFFSET
+	},
+};
+
+static struct class_ctrls avico_ctrls[] = {
+	{
+		.which = V4L2_CTRL_CLASS_MPEG,
+		.ctrls = avico_mpeg_ctrls,
+		.cnt = ARRAY_SIZE(avico_mpeg_ctrls)
+	}
+};
 
 static inline bool checklimit(unsigned const value, unsigned const limit)
 {
@@ -49,7 +71,7 @@ static void help(const char *program_name)
 	puts("    -o arg    Output file name");
 	puts("    -r arg    Specify desired framerate");
 	puts("    -s arg    Set video size [defaults to 1280x720]");
-	puts("    -q arg    Set quantization parameter");
+	puts("    -c <ctrl>=<val>    Set the value of the controls [VIDIOC_S_EXT_CTRLS]");
 	puts("    -v        Be more verbose. Can be specified multiple times");
 }
 
@@ -66,9 +88,10 @@ int main(int argc, char *argv[])
 	unsigned framerate = 0;
 	char const *output = NULL;
 	int outfd = -1;
-	int qp = -1;
 
-	while ((opt = getopt(argc, argv, "f:hn:o:r:s:q:v")) != -1) {
+	const char *optstring = "f:hn:o:r:s:c:v";
+
+	while ((opt = getopt(argc, argv, optstring)) != -1) {
 		switch (opt) {
 			case 'f': outfd = atoi(optarg); break;
 			case 'h': help(argv[0]); return EXIT_SUCCESS;
@@ -88,7 +111,7 @@ int main(int argc, char *argv[])
 
 				break;
 			}
-			case 'q': qp = atoi(optarg); break;
+			case 'c': /* skip now, parse later */; break;
 			case 'v': vlevel++; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
 		}
@@ -109,21 +132,21 @@ int main(int argc, char *argv[])
 			0, card);
 	pr_info("Encoding card: %.32s", card);
 
+	find_controls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls));
+	optind = 0;
+	while ((opt = getopt(argc, argv, optstring)) != -1) {
+		switch (opt) {
+			case 'c':
+				parse_ctrl_opts(optarg, avico_ctrls, ARRAY_SIZE(avico_ctrls));
+				break;
+		}
+	}
+
 	v4l2_configure(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_M420, width, height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420, width, height);
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264, width, height);
 
-	if (qp >= 0) {
-		struct v4l2_ext_control ctrl = {
-				.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP,
-				.value = qp
-		};
-
-		v4l2_s_ext_ctrls(m2mfd, V4L2_CTRL_CLASS_MPEG, 1, &ctrl);
-
-		if (qp != ctrl.value)
-			pr_warn("QP from VPU: %d", ctrl.value);
-	}
+	g_s_ctrls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls), true);
 
 	struct v4l2_fract timeperframe = { 1, framerate };
 

@@ -12,6 +12,20 @@
 
 #include <linux/videodev2.h>
 
+struct ctrl {
+	__u32 id;
+	char name[32];
+	__s32 value;
+	bool unsupported;
+	bool set_value;
+};
+
+struct class_ctrls {
+	__u32 which;
+	struct ctrl *ctrls;
+	__u32 cnt;
+};
+
 const char *v4l2_field_name(enum v4l2_field const field);
 const char *v4l2_type_name(enum v4l2_buf_type const type);
 const char *v4l2_memory_name(enum v4l2_memory const memory);
@@ -42,5 +56,10 @@ void v4l2_g_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
 		      struct v4l2_ext_control *const controls);
 void v4l2_s_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
 		      struct v4l2_ext_control *const controls);
+int query_ext_ctrl_ioctl(int const fd, struct v4l2_query_ext_ctrl *qctrl);
+
+void find_controls(int const fd, struct class_ctrls cl[], __u32 const cl_cnt);
+void parse_ctrl_opts(char *optarg, struct class_ctrls cl[], __u32 const cl_cnt);
+void g_s_ctrls(int const fd, struct class_ctrls cl[], __u32 const cl_cnt, bool const print);
 
 #endif /* V4L2_H */

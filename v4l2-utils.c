@@ -15,6 +15,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <ctype.h>
+#include <stdbool.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -23,6 +25,7 @@
 
 #include <linux/videodev2.h>
 
+#include "v4l2-utils.h"
 #include "log.h"
 
 static const char *v4l2_field_names[] = {
@@ -512,5 +515,256 @@ void v4l2_s_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
 		else
 			error(EXIT_FAILURE, errno, "Error setting control %u",
 			      controls[ctrls.error_idx].id);
+	}
+}
+
+int query_ext_ctrl_ioctl(int const fd, struct v4l2_query_ext_ctrl *qctrl)
+{
+	struct v4l2_queryctrl qc;
+	int rc;
+
+	rc = ioctl(fd, VIDIOC_QUERY_EXT_CTRL, qctrl);
+	if (rc != ENOTTY)
+		return rc;
+
+	qc.id = qctrl->id;
+	rc = ioctl(fd, VIDIOC_QUERYCTRL, &qc);
+	if (rc == 0) {
+		qctrl->type = qc.type;
+		memcpy(qctrl->name, qc.name, sizeof(qctrl->name));
+		qctrl->minimum = qc.minimum;
+		if (qc.type == V4L2_CTRL_TYPE_BITMASK) {
+			qctrl->maximum = (__u32)qc.maximum;
+			qctrl->default_value = (__u32)qc.default_value;
+		} else {
+			qctrl->maximum = qc.maximum;
+			qctrl->default_value = qc.default_value;
+		}
+		qctrl->step = qc.step;
+		qctrl->flags = qc.flags;
+		qctrl->elems = 1;
+		qctrl->nr_of_dims = 0;
+		memset(qctrl->dims, 0, sizeof(qctrl->dims));
+		switch (qctrl->type) {
+		case V4L2_CTRL_TYPE_INTEGER64:
+			qctrl->elem_size = sizeof(__s64);
+			break;
+		case V4L2_CTRL_TYPE_STRING:
+			qctrl->elem_size = qc.maximum + 1;
+			qctrl->flags |= V4L2_CTRL_FLAG_HAS_PAYLOAD;
+			break;
+		default:
+			qctrl->elem_size = sizeof(__s32);
+			break;
+		}
+		memset(qctrl->reserved, 0, sizeof(qctrl->reserved));
+	}
+	qctrl->id = qc.id;
+
+	return rc;
+}
+
+/*
+ * Copy name to var, but convert a substring of non-alphanumeric characters followed by
+ * an alphanumeric character to the single underscore and convert an upper-case letter to
+ * the corresponding lower-case letter.
+ *
+ * Examples:
+ * - If name is "Gain, Automatic.", var will be "gain_automatic".
+ * - If name is "H264 I-Frame QP Value", var will be "h264_i_frame_qp_value".
+ */
+static void name2var(const char *name, char *var)
+{
+	int add_underscore = 0;
+	char *v = var;
+
+	while (*name) {
+		if (isalnum(*name)) {
+			if (add_underscore)
+				*var++ = '_';
+			add_underscore = 0;
+			*var++ = tolower(*name);
+		} else if (v != var) {
+			add_underscore = 1;
+		}
+		name++;
+	}
+	*var = '\0';
+}
+
+void find_controls(int const fd, struct class_ctrls cl[], __u32 const cl_cnt)
+{
+	int i, j;
+
+	for (i = 0; i < cl_cnt; ++i) {
+		struct ctrl *ctrls = cl[i].ctrls;
+
+		for (j = 0; j < cl[i].cnt; ++j) {
+			struct v4l2_query_ext_ctrl qc = {
+				.id = ctrls[j].id
+			};
+
+			if (!query_ext_ctrl_ioctl(fd, &qc)) {
+				name2var(qc.name, ctrls[j].name);
+			} else {
+				ctrls[j].unsupported = true;
+				*ctrls[j].name = '\0';
+			}
+		}
+	}
+}
+
+static bool parse_next_subopt(char **subs, char **value)
+{
+	static char *const subopts[] = {
+		NULL
+	};
+	int const opt = getsubopt(subs, subopts, value);
+
+	if (opt < 0 || *value)
+		return false;
+
+	return true;
+}
+
+static void find_supported_ctrl_by_name(struct class_ctrls const cl[],
+					__u32 const cl_cnt, const char *name,
+					size_t const size, struct ctrl **ctrlp)
+{
+	int i, j;
+
+	for (i = 0; i < cl_cnt; ++i) {
+		struct ctrl *ctrls = cl[i].ctrls;
+
+		for (j = 0; j < cl[i].cnt; ++j)
+			if (!ctrls[j].unsupported &&
+			    strlen(ctrls[j].name) == size &&
+			    strncmp(name, ctrls[j].name, size) == 0) {
+				*ctrlp = &ctrls[j];
+				return;
+			}
+	}
+}
+
+/*
+ * Get the values of controls passed via command line and mark corresponding controls
+ * using the set_value field.
+ */
+void parse_ctrl_opts(char *optarg, struct class_ctrls cl[], __u32 const cl_cnt)
+{
+	char *value, *subs;
+
+	subs = optarg;
+	while (*subs != '\0') {
+		const char *equal = NULL;
+
+		if (parse_next_subopt(&subs, &value))
+			error(EXIT_FAILURE, 0, "No value given to suboption\n");
+
+		equal = strchr(value, '=');
+		if (equal) {
+			struct ctrl *ctrl = NULL;
+
+			if (equal - value <= 0)
+				error(EXIT_FAILURE, 0, "Put control name before '='\n");
+
+			find_supported_ctrl_by_name(cl, cl_cnt, value, equal - value,
+						    &ctrl);
+			if (ctrl) {
+				ctrl->set_value = true;
+				ctrl->value = strtol(equal + 1, NULL, 0);
+			} else {
+				pr_warn("Control %.*s isn't supported", equal - value,
+					value);
+			}
+		} else {
+			error(EXIT_FAILURE, 0, "Control '%s' without '='\n", value);
+		}
+	}
+}
+
+void g_s_ctrls(int const fd, struct class_ctrls cl[], __u32 const cl_cnt,
+	       bool const print)
+{
+	int i, j;
+
+	for (i = 0; i < cl_cnt; ++i) {
+		__u32 const cnt = cl[i].cnt;
+		__u32 s_cnt = 0, g_cnt = 0;
+		struct ctrl *ctrls = cl[i].ctrls;
+		struct v4l2_ext_control *s_ctrl, *g_ctrl, *s_p, *g_p;
+
+		for (j = 0; j < cnt; ++j) {
+			if (ctrls[j].unsupported)
+				continue;
+
+			if (ctrls[j].set_value)
+				s_cnt++;
+			else
+				g_cnt++;
+		}
+
+		if (s_cnt == 0 && g_cnt == 0)
+			continue;
+
+		if (s_cnt) {
+			s_ctrl = malloc(s_cnt * sizeof(*s_ctrl));
+			memset(s_ctrl, 0, s_cnt * sizeof(*s_ctrl));
+			s_p = s_ctrl;
+		}
+
+		if (g_cnt) {
+			g_ctrl = malloc(g_cnt * sizeof(*g_ctrl));
+			memset(g_ctrl, 0, g_cnt * sizeof(*g_ctrl));
+			g_p = g_ctrl;
+		}
+
+		for (j = 0; j < cnt; ++j) {
+			if (ctrls[j].unsupported)
+				continue;
+
+			if (ctrls[j].set_value) {
+				s_p->id = ctrls[j].id;
+				s_p->value = ctrls[j].value;
+				s_p++;
+			} else {
+				g_p->id = ctrls[j].id;
+				g_p->value = ctrls[j].value;
+				g_p++;
+			}
+		}
+
+		if (s_cnt) {
+			v4l2_s_ext_ctrls(fd, cl[i].which, s_cnt, s_ctrl);
+			s_p = s_ctrl;
+		}
+
+		if (g_cnt) {
+			v4l2_g_ext_ctrls(fd, cl[i].which, g_cnt, g_ctrl);
+			g_p = g_ctrl;
+		}
+
+		for (j = 0; j < cnt; ++j) {
+			if (ctrls[j].unsupported)
+				continue;
+
+			if (ctrls[j].set_value) {
+				ctrls[j].value = s_p->value;
+				s_p++;
+			} else {
+				ctrls[j].value = g_p->value;
+				g_p++;
+			}
+
+			if (print)
+				pr_info("Control: %.32s = %d", ctrls[j].name,
+					ctrls[j].value);
+		}
+
+		if (s_cnt)
+			free(s_ctrl);
+
+		if (g_cnt)
+			free(g_ctrl);
 	}
 }
