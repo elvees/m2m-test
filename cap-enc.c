@@ -42,6 +42,9 @@ static struct ctrl avico_mpeg_ctrls[] = {
 	{
 		.id = V4L2_CID_MPEG_VIDEO_H264_CHROMA_QP_INDEX_OFFSET
 	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE
+	}
 };
 
 static struct class_ctrls avico_ctrls[] = {
