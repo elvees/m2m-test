@@ -229,7 +229,7 @@ int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 
 void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 		uint32_t const pixelformat, uint32_t const width,
-		uint32_t const height)
+		uint32_t const height, uint32_t const bytesperline)
 {
 	int rc;
 	struct v4l2_format fmt = {
@@ -239,7 +239,8 @@ void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 				.width = width,
 				.height = height,
 				.pixelformat = pixelformat,
-				.field = V4L2_FIELD_ANY
+				.field = V4L2_FIELD_ANY,
+				.bytesperline = bytesperline
 			}
 		}
 	};
@@ -256,6 +257,9 @@ void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 
 	if (fmt.fmt.pix.pixelformat != pixelformat)
 		error(EXIT_FAILURE, 0, "Can not set requested pixel format");
+
+	if (fmt.fmt.pix.bytesperline != bytesperline)
+		error(EXIT_FAILURE, 0, "Can not set bytes per line");
 
 	pr_debug("V4L2: Configured: pixelformat = %.4s, width = %u, height = %u, sizeimage = %u",
 		 (char *)&fmt.fmt.pix.pixelformat, fmt.fmt.pix.width,

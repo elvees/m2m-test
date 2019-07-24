@@ -49,6 +49,7 @@
 #include "v4l2-utils.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define ROUND_UP(x, a) (((x)+(a)-1)&~((a)-1))
 
 #define V4L2_CID_TRANS_TIME_MSEC (V4L2_CID_PRIVATE_BASE)
 #define V4L2_CID_TRANS_NUM_BUFS  (V4L2_CID_PRIVATE_BASE + 1)
@@ -88,6 +89,11 @@ static struct m2m_buffer {
 	void *buf;
 	AVFrame *frame;
 } out_bufs[NUM_BUFS], cap_bufs[NUM_BUFS];
+
+static inline bool is_valid_out_buf(unsigned const outn)
+{
+	return outn < NUM_BUFS && out_bufs[outn].buf;
+}
 
 static void m2m_vim2m_controls(int const fd) {
 	bool hflip = false, vflip = false;
@@ -178,7 +184,7 @@ static void m2m_buffers_get(int const fd) {
 		if (cap_bufs[i].buf == MAP_FAILED) error(EXIT_FAILURE, errno, "Can not mmap capture buffer");
 	}
 
-	for (int i = 0; i < NUM_BUFS; i++) {
+	for (int i = 0; i < capreqbuf.count; ++i) {
 		struct v4l2_buffer buf = {
 			.index = i,
 			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -190,7 +196,7 @@ static void m2m_buffers_get(int const fd) {
 }
 
 static void queue_outbuf(int const fd, struct SwsContext *dsc, AVFrame * const iframe,
-		bool const transform, int const index)
+		bool const transform, unsigned const index)
 {
 	sws_scale(dsc, (uint8_t const * const*)iframe->data,
 			iframe->linesize, 0, iframe->height,
@@ -200,13 +206,13 @@ static void queue_outbuf(int const fd, struct SwsContext *dsc, AVFrame * const i
 	if (transform)
 		yuv420_to_m420(out_bufs[index].frame);
 
-	out_bufs[index].v4l2.bytesused = out_bufs[index].frame->width *
+	out_bufs[index].v4l2.bytesused = out_bufs[index].frame->linesize[0] *
 			out_bufs[index].frame->height * 3 / 2;
 	out_bufs[index].v4l2.flags = 0;
 	v4l2_qbuf(fd, &out_bufs[index].v4l2);
 }
 
-static void dequeue_outbuf(int const fd, int const index)
+static void dequeue_outbuf(int const fd, unsigned const index)
 {
 	v4l2_dqbuf(fd, &out_bufs[index].v4l2);
 	if (index != out_bufs[index].v4l2.index)
@@ -238,15 +244,14 @@ static unsigned process_capbuf(int const fd, int const outfd)
 }
 
 static void m2m_process(int const fd, int const outfd, struct SwsContext *dsc,
-		AVFrame * const iframe, bool const transform, unsigned const frame,
-		unsigned *const encframe, uint64_t *const outsize)
+		AVFrame * const iframe, bool const transform, unsigned *const encframe,
+		uint64_t *const outsize, unsigned const outn)
 {
 	int rc = 0;
-	unsigned i = frame % NUM_BUFS;
 	unsigned bytesused = 0;
 
-	if (!(out_bufs[i].v4l2.flags & V4L2_BUF_FLAG_QUEUED)) {
-		queue_outbuf(fd, dsc, iframe, transform, i);
+	if (!(out_bufs[outn].v4l2.flags & V4L2_BUF_FLAG_QUEUED)) {
+		queue_outbuf(fd, dsc, iframe, transform, outn);
 	} else {
 		struct pollfd fds[1] = {
 			{ fd, POLLOUT | POLLIN }
@@ -267,8 +272,8 @@ static void m2m_process(int const fd, int const outfd, struct SwsContext *dsc,
 			}
 
 			if (fds[0].revents & POLLOUT) {
-				dequeue_outbuf(fd, i);
-				queue_outbuf(fd, dsc, iframe, transform, i);
+				dequeue_outbuf(fd, outn);
+				queue_outbuf(fd, dsc, iframe, transform, outn);
 				break;
 			}
 		}
@@ -336,7 +341,7 @@ static unsigned process_stream(AVFormatContext *const ifc,
 		uint64_t *const outsize)
 {
 	static int64_t start_pts = 0;
-	static unsigned frame = 0, skipped = 0;
+	static unsigned frame = 0, skipped = 0, outn = 0;
 
 	AVPacket packet;
 	int rc = 0;
@@ -371,7 +376,9 @@ static unsigned process_stream(AVFormatContext *const ifc,
 				continue;
 			}
 
-			m2m_process(m2mfd, outfd, dsc, iframe, transform, frame, encframe, outsize);
+			m2m_process(m2mfd, outfd, dsc, iframe, transform, encframe, outsize, outn);
+			if (!is_valid_out_buf(++outn))
+				outn = 0;
 
 			/*if (ofc) {
 				AVPacket packet = { };
@@ -563,6 +570,9 @@ int main(int argc, char *argv[]) {
 	if (avcodec_open2(icc, ic, NULL) < 0)
 		error(EXIT_FAILURE, 0, "Could not open codec");
 
+	if (strncmp(card, "avico", 32) == 0 && !transform && icc->width % 16 > 0)
+		error(EXIT_FAILURE, 0, "Width must be multiple of 16 when pixel format is M420");
+
 	enum AVPixelFormat format = AV_PIX_FMT_YUV420P;
 
 	//! \brief Device swscale context
@@ -589,9 +599,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420,
-			icc->width, icc->height);
+			icc->width, icc->height, ROUND_UP(icc->width, 16));
 	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264,
-			icc->width, icc->height);
+			icc->width, icc->height, 0);
 
 	g_s_ctrls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls), true);
 
@@ -602,11 +612,12 @@ int main(int argc, char *argv[]) {
 
 	pr_verb("Allocating AVFrames for obtained buffers...");
 
-	int av_frame_size = av_image_get_buffer_size(format, icc->width, icc->height, 1);
-	if (av_frame_size != out_bufs[0].v4l2.length)
-		error(EXIT_FAILURE, 0, "FFmpeg and V4L2 buffer sizes are not equal");
+	int av_frame_size = av_image_get_buffer_size(format, icc->width, icc->height, 16);
+	for (int i = 0; is_valid_out_buf(i); i++)
+		if (av_frame_size != out_bufs[i].v4l2.length)
+			error(EXIT_FAILURE, 0, "FFmpeg and V4L2 buffer sizes are not equal");
 
-	for (int i = 0; out_bufs[i].buf; i++) {
+	for (int i = 0; is_valid_out_buf(i); i++) {
 		AVFrame *frame = out_bufs[i].frame = av_frame_alloc();
 		if (!frame) error(EXIT_FAILURE, 0, "Not enough memory");
 
@@ -615,7 +626,7 @@ int main(int argc, char *argv[]) {
 		frame->height = icc->height;
 
 		av_image_fill_arrays(frame->data, frame->linesize, out_bufs[i].buf,
-				frame->format, frame->width, frame->height, 1);
+				frame->format, frame->width, frame->height, 16);
 	}
 
 	if (output) {

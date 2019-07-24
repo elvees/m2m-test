@@ -36,7 +36,7 @@ int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 		char card[32]);
 void v4l2_configure(int const fd, enum v4l2_buf_type const type,
 		uint32_t const pixelformat, uint32_t const width,
-		uint32_t const height);
+		uint32_t const height, uint32_t const bytesperline);
 void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
 	uint32_t *pixelformat, uint32_t *width,
 	uint32_t *height);

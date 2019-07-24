@@ -29,6 +29,7 @@
 #include "v4l2-utils.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define ROUND_UP(x, a) (((x)+(a)-1)&~((a)-1))
 
 #define NUM_BUFS 4
 
@@ -145,9 +146,11 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	v4l2_configure(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_M420, width, height);
-	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420, width, height);
-	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264, width, height);
+	v4l2_configure(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_M420, width, height,
+			ROUND_UP(width, 16));
+	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420, width, height,
+			ROUND_UP(width, 16));
+	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264, width, height, 0);
 
 	g_s_ctrls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls), true);
 
