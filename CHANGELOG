@@ -2,6 +2,20 @@
 m2m-test release history
 ========================
 
+v1.6 - 2019-08-08
+=================
+
+* Add LICENSE file.
+* m2m-test: cap-enc: Add ability to set V4L2 controls via command
+  line similar to v4l2-ctl.
+* Remove hwsgbm-test.
+* Add devbufbench.
+* Add Large File Support.
+* m2m-test: Allow to request more than one output and capture buffers
+  and make processing of input file asynchronous to	encoding.
+* m2m-test: Print a size of encoded data.
+* cap-enc: m2m-test: Support bytesperline aligned by 16 bytes.
+
 v1.5 - 2016-10-12
 =================
 
