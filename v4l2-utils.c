@@ -468,6 +468,17 @@ void v4l2_streamon(int const fd, enum v4l2_buf_type const type)
 				v4l2_type_name(type));
 }
 
+void v4l2_streamoff(int const fd, enum v4l2_buf_type const type)
+{
+	int rc;
+	pr_verb("V4L2: Stream off for %d %s", fd, v4l2_type_name(type));
+
+	rc = ioctl(fd, VIDIOC_STREAMOFF, &type);
+	if (rc != 0)
+		error(EXIT_FAILURE, errno, "Failed to stop %s stream",
+				v4l2_type_name(type));
+}
+
 void v4l2_g_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
 		      struct v4l2_ext_control *const controls)
 {
@@ -501,6 +512,18 @@ void v4l2_s_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
 			error(EXIT_FAILURE, errno, "Failed to set control %u",
 			      controls[ctrls.error_idx].id);
 	}
+}
+
+void v4l2_subscribe_event(int const fd, uint32_t const type)
+{
+	struct v4l2_event_subscription sub = {
+		.type = type
+	};
+	int ret;
+
+	ret = ioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub);
+	if (ret < 0)
+		error(EXIT_FAILURE, errno, "Event %u not supported\n", type);
 }
 
 int query_ext_ctrl_ioctl(int const fd, struct v4l2_query_ext_ctrl *qctrl)
