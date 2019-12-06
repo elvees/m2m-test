@@ -227,72 +227,45 @@ int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 	return fd;
 }
 
-void v4l2_configure(int const fd, enum v4l2_buf_type const type,
-		uint32_t const pixelformat, uint32_t const width,
-		uint32_t const height, uint32_t const bytesperline)
+void v4l2_pix_fmt_validate(struct v4l2_pix_format const *f, uint32_t const pixelformat,
+		uint32_t const width, uint32_t const height, uint32_t const bytesperline)
 {
-	int rc;
-	struct v4l2_format fmt = {
-		.type = type,
-		.fmt = {
-			.pix = {
-				.width = width,
-				.height = height,
-				.pixelformat = pixelformat,
-				.field = V4L2_FIELD_ANY,
-				.bytesperline = bytesperline
-			}
-		}
-	};
+	if ((f->width != width && width != 0) || (f->height != height && height != 0))
+		error(EXIT_FAILURE, 0, "Invalid size %ux%u", f->width, f->height);
+
+	if (f->pixelformat != pixelformat)
+		error(EXIT_FAILURE, 0, "Invalid pixel format %c%c%c%c",
+		      (f->pixelformat & 0xff),
+		      (f->pixelformat >>  8) & 0xff,
+		      (f->pixelformat >> 16) & 0xff,
+		      (f->pixelformat >> 24) & 0xff);
+
+	if (f->bytesperline != bytesperline && bytesperline != 0)
+		error(EXIT_FAILURE, 0, "Invalid bytes per line %u", f->bytesperline);
+}
+
+void v4l2_setformat(int const fd, enum v4l2_buf_type const type, struct v4l2_format *f)
+{
+	f->type = type;
 
 	pr_verb("V4L2: Setup format for %d %s", fd, v4l2_type_name(type));
 
-	rc = ioctl(fd, VIDIOC_S_FMT, &fmt);
-	if (rc != 0)
+	if (ioctl(fd, VIDIOC_S_FMT, f) != 0)
 		error(EXIT_FAILURE, 0, "Can not set %s format", v4l2_type_name(type));
 
-	if ((fmt.fmt.pix.width != width && width) ||
-			(fmt.fmt.pix.height != height && height))
-		error(EXIT_FAILURE, 0, "Can not set requested size");
-
-	if (fmt.fmt.pix.pixelformat != pixelformat)
-		error(EXIT_FAILURE, 0, "Can not set requested pixel format");
-
-	if (fmt.fmt.pix.bytesperline != bytesperline)
-		error(EXIT_FAILURE, 0, "Can not set bytes per line");
-
-	pr_debug("V4L2: Configured: pixelformat = %.4s, width = %u, height = %u, sizeimage = %u",
-		 (char *)&fmt.fmt.pix.pixelformat, fmt.fmt.pix.width,
-		 fmt.fmt.pix.height, fmt.fmt.pix.sizeimage);
-
-	v4l2_print_format(&fmt);
+	v4l2_print_format(f);
 }
 
 void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
-		uint32_t *pixelformat, uint32_t *width,
-		uint32_t *height)
+		struct v4l2_format *f)
 {
-	int rc;
-	struct v4l2_format fmt = {
-		.type = type,
-		.fmt.pix.field = V4L2_FIELD_ANY
-	};
+	f->type = type;
 
-	pr_verb("V4L2: Setup format for %d %s", fd, v4l2_type_name(type));
+	pr_verb("V4L2: Get format for %d %s", fd, v4l2_type_name(type));
 
-	rc = ioctl(fd, VIDIOC_G_FMT, &fmt);
-	if (rc != 0)
+	if (ioctl(fd, VIDIOC_G_FMT, f) != 0)
 		error(EXIT_FAILURE, 0,
-		      "Can not set %s format", v4l2_type_name(type));
-
-	if (width != NULL)
-		*width = fmt.fmt.pix.width;
-	if (height != NULL)
-		*height = fmt.fmt.pix.height;
-	if (pixelformat != NULL)
-		*pixelformat = fmt.fmt.pix.pixelformat;
-
-	v4l2_print_format(&fmt);
+		      "Can not get %s format", v4l2_type_name(type));
 }
 
 

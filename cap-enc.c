@@ -146,11 +146,35 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	v4l2_configure(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_M420, width, height,
-			ROUND_UP(width, 16));
-	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_PIX_FMT_M420, width, height,
-			ROUND_UP(width, 16));
-	v4l2_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_PIX_FMT_H264, width, height, 0);
+	struct v4l2_format f_src = {
+		.fmt = {
+			.pix = {
+				.width = width,
+				.height = height,
+				.pixelformat = V4L2_PIX_FMT_M420,
+				.field = V4L2_FIELD_ANY,
+				.bytesperline = ROUND_UP(width, 16)
+				/* Default colorspace parameters */
+			}
+		}
+	};
+	struct v4l2_format f_dst = {
+		.fmt = {
+			.pix = {
+				.width = width,
+				.height = height,
+				.pixelformat = V4L2_PIX_FMT_H264,
+				.field = V4L2_FIELD_ANY
+			}
+		}
+	};
+	v4l2_setformat(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, &f_src);
+	v4l2_pix_fmt_validate(&f_src.fmt.pix, V4L2_PIX_FMT_M420, width, height, ROUND_UP(width, 16));
+	/* Set parameters from input device including colorspace */
+	v4l2_setformat(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, &f_src);
+	v4l2_pix_fmt_validate(&f_src.fmt.pix, V4L2_PIX_FMT_M420, width, height, ROUND_UP(width, 16));
+	v4l2_setformat(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, &f_dst);
+	v4l2_pix_fmt_validate(&f_dst.fmt.pix, V4L2_PIX_FMT_H264, width, height, 0);
 
 	g_s_ctrls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls), true);
 

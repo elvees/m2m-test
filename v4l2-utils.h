@@ -34,12 +34,12 @@ void v4l2_print_format(struct v4l2_format const *const p);
 void v4l2_print_buffer(struct v4l2_buffer const *const p);
 int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 		char card[32]);
-void v4l2_configure(int const fd, enum v4l2_buf_type const type,
-		uint32_t const pixelformat, uint32_t const width,
-		uint32_t const height, uint32_t const bytesperline);
+void v4l2_setformat(int const fd, enum v4l2_buf_type const type,
+		struct v4l2_format *f);
+void v4l2_pix_fmt_validate(struct v4l2_pix_format const *f, uint32_t const pixelformat,
+		uint32_t const width, uint32_t const height, uint32_t const bytesperline);
 void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
-	uint32_t *pixelformat, uint32_t *width,
-	uint32_t *height);
+		struct v4l2_format *f);
 void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
 		struct v4l2_fract *const timeperframe);
 float v4l2_framerate_get(int const fd, enum v4l2_buf_type const type);
