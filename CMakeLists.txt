@@ -13,7 +13,7 @@ check_include_file(linux/dmabuf_exporter.h HAVE_DMABUF_EXPORTER_H)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
-add_definitions(-DVERSION="v1.6")
+add_definitions(-DVERSION="v1.7")
 
 if(TARGET PkgConfig::FFmpeg)
     add_executable(m2m-test m2m-test.c log.c v4l2-utils.c m420.c)
