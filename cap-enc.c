@@ -45,6 +45,12 @@ static struct ctrl avico_mpeg_ctrls[] = {
 	},
 	{
 		.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_FRAME_RC_ENABLE
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_BITRATE
 	}
 };
 
