@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
 
 	pr_info("Capture framerate: %.2f FPS",
 			v4l2_framerate_get(inputfd, V4L2_BUF_TYPE_VIDEO_CAPTURE));
-	pr_info("Encoding framerate: %.2f/%.2f FPS",
+	pr_info("Encoding framerate: %.2f -> %.2f FPS",
 			v4l2_framerate_get(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT),
 			v4l2_framerate_get(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE));
 

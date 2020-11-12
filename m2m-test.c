@@ -633,6 +633,23 @@ int main(int argc, char *argv[]) {
 
 	g_s_ctrls(m2mfd, avico_ctrls, ARRAY_SIZE(avico_ctrls), true);
 
+	struct v4l2_fract timeperframe;
+
+	if (framerate) {
+		timeperframe.numerator = 1;
+		timeperframe.denominator = atoi(framerate);
+	} else {
+		timeperframe.numerator = ifc->streams[video_stream_number]->r_frame_rate.den;
+		timeperframe.denominator = ifc->streams[video_stream_number]->r_frame_rate.num;
+	}
+
+	v4l2_framerate_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT, &timeperframe);
+	v4l2_framerate_configure(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE, &timeperframe);
+
+	pr_info("Encoding framerate: %.2f -> %.2f FPS",
+			v4l2_framerate_get(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT),
+			v4l2_framerate_get(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE));
+
 	m2m_buffers_get(m2mfd);
 
 	v4l2_streamon(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT);
