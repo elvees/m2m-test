@@ -17,6 +17,7 @@ if(FFMPEG_FOUND)
 	target_link_libraries(m2m-test ${FFMPEG_LIBRARIES})
 
 	add_executable(any2m420 any2m420.c log.c m420.c)
+	target_compile_definitions(any2m420 PRIVATE -D_FILE_OFFSET_BITS=64)
 	target_link_libraries(any2m420 ${FFMPEG_LIBRARIES})
 
 	install(TARGETS m2m-test any2m420 RUNTIME DESTINATION bin)
