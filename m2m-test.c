@@ -135,7 +135,7 @@ static void m2m_vim2m_controls(int const fd) {
 	if (rc != 0) error(EXIT_SUCCESS, errno, "Can not set transaction length");
 }
 
-static void m2m_buffers_get(int const fd) {
+static void m2m_buffers_get(int const fd, bool userptr) {
 	int rc;
 
 	pr_verb("M2M: Obtaining buffers...");
@@ -143,7 +143,7 @@ static void m2m_buffers_get(int const fd) {
 	struct v4l2_requestbuffers outreqbuf = {
 		.count = NUM_BUFS,
 		.type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
-		.memory = V4L2_MEMORY_MMAP
+		.memory = userptr ? V4L2_MEMORY_USERPTR : V4L2_MEMORY_MMAP
 	};
 
 	struct v4l2_requestbuffers capreqbuf = {
@@ -165,16 +165,23 @@ static void m2m_buffers_get(int const fd) {
 	for (int i = 0; i < outreqbuf.count; ++i) {
 		struct v4l2_buffer *vbuf = &out_bufs[i].v4l2;
 		vbuf->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		vbuf->memory = V4L2_MEMORY_MMAP;
+		vbuf->memory = userptr ? V4L2_MEMORY_USERPTR : V4L2_MEMORY_MMAP;
 		vbuf->index = i;
 		vbuf->flags = 0;
 
 		rc = ioctl(fd, VIDIOC_QUERYBUF, vbuf);
 		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query output buffer");
 		pr_debug("M2M: Got output buffer #%u: length = %u", i, vbuf->length);
-
-		out_bufs[i].buf = mmap(NULL, vbuf->length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, vbuf->m.offset);
-		if (out_bufs[i].buf == MAP_FAILED) error(EXIT_FAILURE, errno, "Can not mmap output buffer");
+		if (userptr) {
+			out_bufs[i].buf = malloc(vbuf->length);
+			if (!out_bufs[i].buf) error(EXIT_FAILURE, errno, "Out of memory");
+			out_bufs[i].v4l2.m.userptr = (unsigned long)out_bufs[i].buf;
+		} else {
+			out_bufs[i].buf = mmap(NULL, vbuf->length, PROT_READ | PROT_WRITE,
+					       MAP_SHARED, fd, vbuf->m.offset);
+			if (out_bufs[i].buf == MAP_FAILED)
+				error(EXIT_FAILURE, errno, "Can not mmap output buffer");
+		}
 	}
 
 	for (int i = 0; i < capreqbuf.count; ++i) {
@@ -462,6 +469,7 @@ static void help(const char *program_name) {
 	puts("    -r arg    When grabbing from camera specify desired framerate");
 	puts("    -s arg    From which frame processing should be started");
 	puts("    -t        Transform video to M420 [Avico-specific]");
+	puts("    -u        Enable USERPTR memory type on output interface (default: MMAP memory type)");
 	puts("    -c <ctrl>=<val>    Set the value of the controls [VIDIOC_S_EXT_CTRLS]");
 	puts("    -v        Be more verbose. Can be specified multiple times");
 }
@@ -492,9 +500,11 @@ int main(int argc, char *argv[]) {
 	char const *output = NULL, *device = NULL;
 	char const *opfn = NULL; //!< Output pixel format name
 
+	bool userptr = false;
+
 	av_register_all();
 
-	const char *optstring = "d:ef:hl:n:o:p:r:s:tc:v";
+	const char *optstring = "d:ef:hl:n:o:p:r:s:tuc:v";
 
 	while ((opt = getopt(argc, argv, optstring)) != -1) {
 		switch (opt) {
@@ -509,6 +519,7 @@ int main(int argc, char *argv[]) {
 			case 'r': framerate = optarg; break;
 			case 's': offset = atoi(optarg); break;
 			case 't': transform = true; break;
+			case 'u': userptr = true; break;
 			case 'c': /* skip now, parse later */; break;
 			case 'v': vlevel++; break;
 			default: error(EXIT_FAILURE, 0, "Try %s -h for help.", argv[0]);
@@ -658,7 +669,7 @@ int main(int argc, char *argv[]) {
 			v4l2_framerate_get(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT),
 			v4l2_framerate_get(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE));
 
-	m2m_buffers_get(m2mfd);
+	m2m_buffers_get(m2mfd, userptr);
 
 	v4l2_streamon(m2mfd, V4L2_BUF_TYPE_VIDEO_OUTPUT);
 	v4l2_streamon(m2mfd, V4L2_BUF_TYPE_VIDEO_CAPTURE);
