@@ -25,6 +25,8 @@
 
 #include <linux/videodev2.h>
 
+#define LOG_PREFIX "V4L2"
+
 #include "v4l2-utils.h"
 #include "log.h"
 
@@ -203,7 +205,7 @@ int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 	int fd = open(device, O_RDWR, 0);
 	if (fd < 0) error(EXIT_FAILURE, errno, "Can not open %s", device);
 
-	pr_verb("V4L2: Device %s descriptor is %d", device, fd);
+	pr_verb("Device %s descriptor is %d", device, fd);
 
 	if (fstat(fd, &stat) == -1)
 		error(EXIT_FAILURE, errno, "Can not stat() %s", device);
@@ -248,7 +250,7 @@ void v4l2_setformat(int const fd, enum v4l2_buf_type const type, struct v4l2_for
 {
 	f->type = type;
 
-	pr_verb("V4L2: Setup format for %d %s", fd, v4l2_type_name(type));
+	pr_verb("Setup format for %d %s", fd, v4l2_type_name(type));
 
 	if (ioctl(fd, VIDIOC_S_FMT, f) != 0)
 		error(EXIT_FAILURE, 0, "Can not set %s format", v4l2_type_name(type));
@@ -261,7 +263,7 @@ void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
 {
 	f->type = type;
 
-	pr_verb("V4L2: Get format for %d %s", fd, v4l2_type_name(type));
+	pr_verb("Get format for %d %s", fd, v4l2_type_name(type));
 
 	if (ioctl(fd, VIDIOC_G_FMT, f) != 0)
 		error(EXIT_FAILURE, 0,
@@ -290,11 +292,10 @@ void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
 			cap = &parm.parm.output.capability;
 			break;
 		default:
-			error(EXIT_FAILURE, 0, "Unsupported V4L2 buffer type: %u", type);
+			error(EXIT_FAILURE, 0, "Unsupported buffer type: %u", type);
 	}
 
-	pr_verb("V4L2: Setup framerate for %d %s to %.1f", fd,
-			v4l2_type_name(type),
+	pr_verb("Setup framerate for %d %s to %.1f", fd, v4l2_type_name(type),
 			(float)timeperframe->denominator / timeperframe->numerator);
 
 	rc = ioctl(fd, VIDIOC_G_PARM, &parm);
@@ -345,8 +346,8 @@ uint32_t v4l2_buffers_request(int const fd, enum v4l2_buf_type const type,
 {
 	int rc;
 
-	pr_verb("V4L2: Obtaining %d %s buffers for %d %s", num,
-			v4l2_memory_name(memory), fd, v4l2_type_name(type));
+	pr_verb("Obtaining %d %s buffers for %d %s", num, v4l2_memory_name(memory),
+			fd, v4l2_type_name(type));
 
 	struct v4l2_requestbuffers reqbuf = {
 		.count = num,
@@ -368,8 +369,7 @@ uint32_t v4l2_buffers_request(int const fd, enum v4l2_buf_type const type,
 		error(EXIT_FAILURE, 0, "Device gives %u %s buffers, but %u is requested",
 				reqbuf.count, v4l2_type_name(type), num);
 
-	pr_debug("V4L2: Got %d %s buffers", reqbuf.count,
-			v4l2_type_name(type));
+	pr_debug("Got %d %s buffers", reqbuf.count, v4l2_type_name(type));
 
 	return reqbuf.count;
 }
@@ -388,8 +388,8 @@ void v4l2_buffers_mmap(int const fd, enum v4l2_buf_type const type,
 		rc = ioctl(fd, VIDIOC_QUERYBUF, &buf);
 		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query buffer");
 
-		pr_debug("V4L2: Got %s buffer #%u: length = %u",
-				v4l2_type_name(type), i, buf.length);
+		pr_debug("Got %s buffer #%u: length = %u", v4l2_type_name(type), i,
+				buf.length);
 
 		//! \todo size field is not needed
 		bufs[i] = mmap(NULL, buf.length, prot, MAP_SHARED, fd,
@@ -417,8 +417,8 @@ void v4l2_buffers_export(int const fd, enum v4l2_buf_type const type,
 			error(EXIT_FAILURE, errno, "Can not export %s buffer",
 					v4l2_type_name(type));
 
-		pr_debug("V4L2: Exported %s buffer #%u: fd = %d",
-				v4l2_type_name(type), i, ebuf.fd);
+		pr_debug("Exported %s buffer #%u: fd = %d", v4l2_type_name(type), i,
+				ebuf.fd);
 
 		bufs[i] = ebuf.fd;
 	}
@@ -452,7 +452,7 @@ void v4l2_qbuf(int const fd, struct v4l2_buffer *const restrict buf)
 void v4l2_streamon(int const fd, enum v4l2_buf_type const type)
 {
 	int rc;
-	pr_verb("V4L2: Stream on for %d %s", fd, v4l2_type_name(type));
+	pr_verb("Stream on for %d %s", fd, v4l2_type_name(type));
 
 	rc = ioctl(fd, VIDIOC_STREAMON, &type);
 	if (rc != 0)
