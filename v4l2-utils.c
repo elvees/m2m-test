@@ -432,6 +432,10 @@ void v4l2_dqbuf(int const fd, struct v4l2_buffer *const restrict buf)
 	if (rc != 0)
 		error(EXIT_FAILURE, errno, "Failed to dequeue %s buffer from %d",
 				v4l2_type_name(buf->type), fd);
+
+	if (buf->flags & V4L2_BUF_FLAG_ERROR)
+		pr_warn("%s buffer #%d is flagged as erroneous",
+				v4l2_type_name(buf->type), buf->sequence);
 }
 
 void v4l2_qbuf(int const fd, struct v4l2_buffer *const restrict buf)
