@@ -178,11 +178,13 @@ void v4l2_print_format(struct v4l2_format const *const p)
 	}
 }
 
-void v4l2_print_buffer(struct v4l2_buffer const *const p)
+void v4l2_print_buffer(const char *const prefix,
+		struct v4l2_buffer const *const p)
 {
-	pr_debug("%02ld:%02d:%02d.%08ld index=%d, type=%s, "
+	pr_debug("%s: %02ld:%02d:%02d.%08ld index=%d, type=%s, "
 		"flags=0x%08x, sequence=%d, memory=%s, bytesused=%d, length=%d, "
 		"offset=%d",
+			prefix,
 			p->timestamp.tv_sec / 3600,
 			(int)(p->timestamp.tv_sec / 60) % 60,
 			(int)(p->timestamp.tv_sec % 60),
@@ -433,6 +435,8 @@ void v4l2_dqbuf(int const fd, struct v4l2_buffer *const restrict buf)
 		error(EXIT_FAILURE, errno, "Failed to dequeue %s buffer from %d",
 				v4l2_type_name(buf->type), fd);
 
+	v4l2_print_buffer("DQBUF", buf);
+
 	if (buf->flags & V4L2_BUF_FLAG_ERROR)
 		pr_warn("%s buffer #%d is flagged as erroneous",
 				v4l2_type_name(buf->type), buf->sequence);
@@ -445,7 +449,7 @@ void v4l2_qbuf(int const fd, struct v4l2_buffer *const restrict buf)
 	pr_debug("Enqueuing buffer #%d to %d %s", buf->index, fd,
 			v4l2_type_name(buf->type));
 
-	v4l2_print_buffer(buf);
+	v4l2_print_buffer("QBUF", buf);
 	rc = ioctl(fd, VIDIOC_QBUF, buf);
 
 	if (rc != 0)

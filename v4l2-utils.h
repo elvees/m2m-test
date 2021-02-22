@@ -31,7 +31,7 @@ const char *v4l2_type_name(enum v4l2_buf_type const type);
 const char *v4l2_memory_name(enum v4l2_memory const memory);
 
 void v4l2_print_format(struct v4l2_format const *const p);
-void v4l2_print_buffer(struct v4l2_buffer const *const p);
+void v4l2_print_buffer(const char *const prefix, struct v4l2_buffer const *const p);
 int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 		char card[32]);
 void v4l2_setformat(int const fd, enum v4l2_buf_type const type,
