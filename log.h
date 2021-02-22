@@ -20,8 +20,14 @@ enum loglevel {
 
 extern enum loglevel vlevel;
 
-void pr_level(enum loglevel const level, char const *format, ...);
+void pr_raw(enum loglevel const level, char const *format, ...);
 void pr_cont(enum loglevel const level, char const *format, ...);
+
+#ifdef LOG_PREFIX
+#define pr_level(level, format, ...) pr_raw(level, LOG_PREFIX ": " format, ##__VA_ARGS__)
+#else
+#define pr_level(level, format, ...) pr_raw(level, format, ##__VA_ARGS__)
+#endif
 
 #define pr_err(format, ...)   pr_level(LOG_ERROR, format, ##__VA_ARGS__)
 #define pr_warn(format, ...)  pr_level(LOG_WARNING, format, ##__VA_ARGS__)

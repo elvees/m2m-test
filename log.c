@@ -14,7 +14,7 @@
 
 enum loglevel vlevel = LOG_WARNING;
 
-void pr_level(enum loglevel const level, char const *format, ...)
+void pr_raw(enum loglevel const level, char const *format, ...)
 {
 	if (level <= vlevel) {
 		FILE *const stream = level < LOG_INFO ? stderr : stdout;
