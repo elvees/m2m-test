@@ -203,18 +203,18 @@ int v4l2_open(char const *const device, uint32_t positive, uint32_t negative,
 	struct stat stat;
 
 	int fd = open(device, O_RDWR, 0);
-	if (fd < 0) error(EXIT_FAILURE, errno, "Can not open %s", device);
+	if (fd < 0) error(EXIT_FAILURE, errno, "Failed to open %s", device);
 
 	pr_verb("Device %s descriptor is %d", device, fd);
 
 	if (fstat(fd, &stat) == -1)
-		error(EXIT_FAILURE, errno, "Can not stat() %s", device);
+		error(EXIT_FAILURE, errno, "Failed to stat() %s", device);
 	else if (!S_ISCHR(stat.st_mode))
 		error(EXIT_FAILURE, 0, "%s is not a character device", device);
 
 	ret = ioctl(fd, VIDIOC_QUERYCAP, &cap);
 	if (ret != 0)
-		error(EXIT_FAILURE, errno, "Can not query device capabilities");
+		error(EXIT_FAILURE, errno, "Failed to query device capabilities");
 
 	if ((cap.capabilities & positive) != positive)
 		error(EXIT_FAILURE, 0, "Device %s does not support required "
@@ -253,7 +253,7 @@ void v4l2_setformat(int const fd, enum v4l2_buf_type const type, struct v4l2_for
 	pr_verb("Setup format for %d %s", fd, v4l2_type_name(type));
 
 	if (ioctl(fd, VIDIOC_S_FMT, f) != 0)
-		error(EXIT_FAILURE, 0, "Can not set %s format", v4l2_type_name(type));
+		error(EXIT_FAILURE, 0, "Failed to set %s format", v4l2_type_name(type));
 
 	v4l2_print_format(f);
 }
@@ -267,7 +267,7 @@ void v4l2_getformat(int const fd, enum v4l2_buf_type const type,
 
 	if (ioctl(fd, VIDIOC_G_FMT, f) != 0)
 		error(EXIT_FAILURE, 0,
-		      "Can not get %s format", v4l2_type_name(type));
+		      "Failed to get %s format", v4l2_type_name(type));
 }
 
 
@@ -300,7 +300,7 @@ void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
 
 	rc = ioctl(fd, VIDIOC_G_PARM, &parm);
 	if (rc != 0)
-		error(EXIT_FAILURE, 0, "Can not get device streaming parameters");
+		error(EXIT_FAILURE, 0, "Failed to get device streaming parameters");
 
 	if (!(*cap & V4L2_CAP_TIMEPERFRAME)) {
 		pr_warn("Device %d %s does not support framerate adjustment", fd,
@@ -312,7 +312,7 @@ void v4l2_framerate_configure(int const fd, enum v4l2_buf_type const type,
 
 	rc = ioctl(fd, VIDIOC_S_PARM, &parm);
 	if (rc != 0)
-		error(EXIT_FAILURE, 0, "Can not set device streaming parameters");
+		error(EXIT_FAILURE, 0, "Failed to set device streaming parameters");
 
 	if (tpf->numerator != timeperframe->numerator ||
 	    tpf->denominator != timeperframe->denominator) {
@@ -358,7 +358,7 @@ uint32_t v4l2_buffers_request(int const fd, enum v4l2_buf_type const type,
 	rc = ioctl(fd, VIDIOC_REQBUFS, &reqbuf);
 
 	if (rc != 0)
-		error(EXIT_FAILURE, errno, "Can not request %s buffers",
+		error(EXIT_FAILURE, errno, "Failed to request %s buffers",
 				v4l2_type_name(type));
 
 	if (reqbuf.count == 0)
@@ -386,7 +386,7 @@ void v4l2_buffers_mmap(int const fd, enum v4l2_buf_type const type,
 		};
 
 		rc = ioctl(fd, VIDIOC_QUERYBUF, &buf);
-		if (rc != 0) error(EXIT_FAILURE, errno, "Can not query buffer");
+		if (rc != 0) error(EXIT_FAILURE, errno, "Failed to query buffer");
 
 		pr_debug("Got %s buffer #%u: length = %u", v4l2_type_name(type), i,
 				buf.length);
@@ -396,7 +396,7 @@ void v4l2_buffers_mmap(int const fd, enum v4l2_buf_type const type,
 				buf.m.offset);
 
 		if (bufs[i] == MAP_FAILED)
-			error(EXIT_FAILURE, errno, "Can not mmap %s buffer",
+			error(EXIT_FAILURE, errno, "Failed to mmap %s buffer",
 					v4l2_type_name(type));
 	}
 }
@@ -414,7 +414,7 @@ void v4l2_buffers_export(int const fd, enum v4l2_buf_type const type,
 
 		rc = ioctl(fd, VIDIOC_EXPBUF, &ebuf);
 		if (rc != 0)
-			error(EXIT_FAILURE, errno, "Can not export %s buffer",
+			error(EXIT_FAILURE, errno, "Failed to export %s buffer",
 					v4l2_type_name(type));
 
 		pr_debug("Exported %s buffer #%u: fd = %d", v4l2_type_name(type), i,
@@ -430,7 +430,7 @@ void v4l2_dqbuf(int const fd, struct v4l2_buffer *const restrict buf)
 
 	rc = ioctl(fd, VIDIOC_DQBUF, buf);
 	if (rc != 0)
-		error(EXIT_FAILURE, errno, "Can not dequeue %s buffer from %d",
+		error(EXIT_FAILURE, errno, "Failed to dequeue %s buffer from %d",
 				v4l2_type_name(buf->type), fd);
 }
 
@@ -445,7 +445,7 @@ void v4l2_qbuf(int const fd, struct v4l2_buffer *const restrict buf)
 	rc = ioctl(fd, VIDIOC_QBUF, buf);
 
 	if (rc != 0)
-		error(EXIT_FAILURE, errno, "Can not enqueue %s buffer to %d",
+		error(EXIT_FAILURE, errno, "Failed to enqueue %s buffer to %d",
 				v4l2_type_name(buf->type), fd);
 }
 
@@ -472,7 +472,7 @@ void v4l2_g_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
 
 	rc = ioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls);
 	if (rc != 0)
-		error(EXIT_FAILURE, errno, "Error getting controls");
+		error(EXIT_FAILURE, errno, "Failed to get controls");
 }
 
 void v4l2_s_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
@@ -488,9 +488,9 @@ void v4l2_s_ext_ctrls(int const fd, uint32_t const which, uint32_t const count,
 	rc = ioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls);
 	if (rc != 0) {
 		if (ctrls.error_idx >= ctrls.count || count == 0)
-			error(EXIT_FAILURE, errno, "Error setting controls");
+			error(EXIT_FAILURE, errno, "Failed to set controls");
 		else
-			error(EXIT_FAILURE, errno, "Error setting control %u",
+			error(EXIT_FAILURE, errno, "Failed to set control %u",
 			      controls[ctrls.error_idx].id);
 	}
 }
