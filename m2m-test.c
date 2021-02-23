@@ -96,6 +96,8 @@ static struct m2m_buffer {
 	AVFrame *frame;
 } out_bufs[NUM_BUFS], cap_bufs[NUM_BUFS];
 
+bool drop = false;
+
 static inline bool is_valid_out_buf(unsigned const outn)
 {
 	return outn < NUM_BUFS && out_bufs[outn].buf;
@@ -235,11 +237,15 @@ static unsigned process_capbuf(int const fd, int const outfd)
 	unsigned bytesused = 0;
 
 	v4l2_dqbuf(fd, &buf);
-	bytesused = buf.bytesused;
-	if (outfd >= 0) {
-		rc = write(outfd, cap_bufs[buf.index].buf, buf.bytesused);
-		if (rc < 0)
-			error(EXIT_FAILURE, errno, "Can not write to output");
+	if (drop && (buf.flags & V4L2_BUF_FLAG_ERROR)) {
+		pr_info("Buffer #%d is dropped", buf->sequence);
+	} else {
+		bytesused = buf.bytesused;
+		if (outfd >= 0) {
+			rc = write(outfd, cap_bufs[buf.index].buf, buf.bytesused);
+			if (rc < 0)
+				error(EXIT_FAILURE, errno, "Can not write to output");
+		}
 	}
 
 	buf.flags = 0;
@@ -447,6 +453,7 @@ static void help(const char *program_name) {
 	printf("Synopsys: %s -d device [options] file | /dev/videoX\n\n", program_name);
 	puts("Options:");
 	puts("    -d arg    Specify M2M device to use [mandatory]");
+	puts("    -e        Drop erroneous buffers");
 	puts("    -f arg    Output file descriptor number");
 	puts("    -l arg    Loop over input file (-1 means infinitely)");
 	puts("    -n arg    Specify how many frames should be processed");
@@ -487,11 +494,12 @@ int main(int argc, char *argv[]) {
 
 	av_register_all();
 
-	const char *optstring = "d:f:hl:n:o:p:r:s:tc:v";
+	const char *optstring = "d:ef:hl:n:o:p:r:s:tc:v";
 
 	while ((opt = getopt(argc, argv, optstring)) != -1) {
 		switch (opt) {
 			case 'd': device = optarg; break;
+			case 'e': drop = true; break;
 			case 'f': outfd = atoi(optarg); break;
 			case 'h': help(argv[0]); return EXIT_SUCCESS;
 			case 'l': loops = atoi(optarg); break;
