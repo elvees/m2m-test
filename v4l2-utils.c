@@ -127,7 +127,7 @@ void v4l2_print_format(struct v4l2_format const *const p)
 			mp->colorspace, mp->num_planes, mp->flags,
 			mp->ycbcr_enc, mp->quantization);
 		for (i = 0; i < mp->num_planes; i++)
-			pr_debug("plane %u: bytesperline=%u sizeimage=%u\n", i,
+			pr_debug("plane %u: bytesperline=%u sizeimage=%u", i,
 					mp->plane_fmt[i].bytesperline,
 					mp->plane_fmt[i].sizeimage);
 		break;
@@ -163,7 +163,7 @@ void v4l2_print_format(struct v4l2_format const *const p)
 		pr_cont(LOG_DEBUG, ", service_set=0x%08x, io_size=%d\n",
 				sliced->service_set, sliced->io_size);
 		for (i = 0; i < 24; i++)
-			pr_debug("line[%02u]=0x%04x, 0x%04x\n", i,
+			pr_debug("line[%02u]=0x%04x, 0x%04x", i,
 				sliced->service_lines[0][i],
 				sliced->service_lines[1][i]);
 		break;
