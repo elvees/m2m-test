@@ -238,7 +238,7 @@ static unsigned process_capbuf(int const fd, int const outfd)
 
 	v4l2_dqbuf(fd, &buf);
 	if (drop && (buf.flags & V4L2_BUF_FLAG_ERROR)) {
-		pr_info("Buffer #%d is dropped", buf->sequence);
+		pr_info("Buffer #%d is dropped", buf.sequence);
 	} else {
 		bytesused = buf.bytesused;
 		if (outfd >= 0) {
