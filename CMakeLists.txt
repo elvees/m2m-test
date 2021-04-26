@@ -1,42 +1,43 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.6)
 
-project(m2m-test C)
+project(M2MTest C)
 
 include(CheckIncludeFile)
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(FFMPEG libavformat>=57.40 libavdevice libavcodec>=57.48 libswscale libavutil)
-set(CMAKE_C_FLAGS "-std=gnu99 -Wall")
+pkg_check_modules(FFmpeg IMPORTED_TARGET
+    libavformat>=57.40 libavdevice libavcodec>=57.48 libswscale libavutil)
+pkg_check_modules(LibDRM IMPORTED_TARGET libdrm libkms)
+check_include_file(linux/dmabuf_exporter.h HAVE_DMABUF_EXPORTER_H)
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED TRUE)
 add_definitions(-DVERSION="v1.6")
 
-if(FFMPEG_FOUND)
-    include_directories(${FFMPEG_INCLUDE_DIRS})
-
+if(TARGET PkgConfig::FFmpeg)
     add_executable(m2m-test m2m-test.c log.c v4l2-utils.c m420.c)
     target_compile_definitions(m2m-test PRIVATE -D_FILE_OFFSET_BITS=64)
-    target_link_libraries(m2m-test ${FFMPEG_LIBRARIES})
+    target_link_libraries(m2m-test PkgConfig::FFmpeg)
 
     add_executable(any2m420 any2m420.c log.c m420.c)
     target_compile_definitions(any2m420 PRIVATE -D_FILE_OFFSET_BITS=64)
-    target_link_libraries(any2m420 ${FFMPEG_LIBRARIES})
+    target_link_libraries(any2m420 PkgConfig::FFmpeg)
 
     install(TARGETS m2m-test any2m420 RUNTIME DESTINATION bin)
 endif()
 
-check_include_file(linux/dmabuf_exporter.h HAVE_DMABUF_EXPORTER_H)
-if(HAVE_DMABUF_EXPORTER_H)
-    add_definitions(-DDMABUFEXP)
-endif()
-
-pkg_check_modules(LIBDRM libdrm libkms)
-if(LIBDRM_FOUND)
-    include_directories(${LIBDRM_INCLUDE_DIRS})
-    add_definitions(-DLIBDRM)
-endif()
-
 add_executable(cap-enc cap-enc.c log.c v4l2-utils.c)
 target_compile_definitions(cap-enc PRIVATE -D_FILE_OFFSET_BITS=64)
+
 add_executable(devbufbench log.c devbufbench.c v4l2-utils.c)
-target_link_libraries(devbufbench ${LIBDRM_LIBRARIES})
+
+if(TARGET PkgConfig::LibDRM)
+    target_compile_definitions(devbufbench PRIVATE -DLIBDRM)
+    target_link_libraries(devbufbench PkgConfig::LibDRM)
+endif()
+
+if(HAVE_DMABUF_EXPORTER_H)
+    target_compile_definitions(devbufbench PRIVATE -DDMABUFEXP)
+endif()
 
 install(TARGETS cap-enc devbufbench RUNTIME DESTINATION bin)
