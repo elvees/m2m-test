@@ -742,7 +742,7 @@ static bool try_send_access_unit(struct video_state *vs, unsigned const outn)
 					start_capture(vs);
 					/* TODO: reallocate output buffers */
 
-					ret = pthread_create(&vs->sink.thread, NULL, start_video_sink, &vs);
+					ret = pthread_create(&vs->sink.thread, NULL, start_video_sink, vs);
 					if (ret != 0)
 						error(EXIT_FAILURE, errno, "Can not create thread");
 				}
