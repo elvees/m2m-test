@@ -1,0 +1,10 @@
+- project:
+    check:
+      jobs:
+        # TODO: fix warnings and add C_FLAGS for cmake-build job
+        # vars:
+        #   cmake_extra_configure_options: >-
+        #     -DCMAKE_C_FLAGS="-Werror -Wall"
+        #     -DCMAKE_CXX_FLAGS="-Werror -Wall"
+        - mcom02-cmake-build
+        - pre-commit
